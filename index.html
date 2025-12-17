@@ -1,0 +1,2312 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mini OS v13</title>
+<style>
+:root{
+  --fg:#0d1321; --mut:#5f6b7a;
+  --glass:rgba(255,255,255,.92); --border:rgba(0,0,0,.12);
+  --taskbarBg:rgba(255,255,255,.96); --winbarBg:rgba(255,255,255,.98);
+  --accent:#2563eb; --radius:12px;
+}
+html,body{height:100%;margin:0;background:#eef3ff;color:var(--fg);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;overflow:hidden}
+*{box-sizing:border-box}
+button{font:inherit;cursor:pointer}
+input,textarea{height:42px;border:1px solid var(--border);border-radius:10px;background:#fff;color:var(--fg);padding:10px}
+
+/* Wallpapers */
+.wall{position:fixed;inset:0;z-index:0}
+.wall.waves{background:linear-gradient(180deg,#ecf3ff,#ffffff)}
+.wall.aurora{background:radial-gradient(70% 60% at 20% 20%,#c7f0ff 0%,#ffffff 50%),linear-gradient(160deg,#eaf7ff,#ffffff)}
+.wall.ocean{background:linear-gradient(120deg,#a7f3d0,#e0f2fe,#f0f9ff)}
+.wall.white{background:#ffffff}
+.wall.black{background:#0b0b0b}
+.wall.red{background:#ffe3e3}
+
+/* Central clock */
+#centralClock{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:120px;font-weight:900;color:#0d1321;
+  background:rgba(255,255,255,.6); backdrop-filter:saturate(1.1) blur(8px);
+  border:1px solid var(--border); border-radius:20px; padding:20px 40px;
+  z-index:400;
+}
+
+/* Taskbar */
+.taskbar{position:fixed;left:0;right:0;bottom:0;height:64px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;background:var(--taskbarBg);border-top:1px solid var(--border);z-index:900;padding:0 16px}
+.start-btn{padding:8px 12px;border-radius:12px;border:1px solid var(--border);background:#fff;font-weight:700}
+.tb-center{display:flex;justify-content:center;gap:10px}
+.tb-icon{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;border:1px solid var(--border);background:#fff}
+.tb-right{display:flex;align-items:center;gap:10px}
+.sys-chip{padding:8px 10px;border-radius:12px;border:1px solid var(--border);background:#fff}
+
+/* Start menu */
+.start{position:fixed;left:50%;bottom:72px;transform:translateX(-50%);width:min(960px,92vw);border-radius:16px;display:none;background:var(--glass);border:1px solid var(--border);z-index:950}
+.start.show{display:block}
+.start-top{display:flex;justify-content:space-between;align-items:center;padding:12px;border-bottom:1px solid var(--border)}
+.start-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:12px}
+.tile{height:84px;border-radius:12px;border:1px solid var(--border);background:#fff;display:grid;place-items:center;font-weight:800}
+
+/* Desktop */
+.desktop{position:fixed;inset:0;z-index:100}
+.icon-grid{position:absolute;left:24px;right:24px;top:24px;bottom:90px}
+.desktop-icon{position:absolute;width:96px;height:96px;border-radius:14px;background:#fff;border:1px solid var(--border);display:grid;grid-template-rows:58px auto;place-items:center}
+.icon-img{width:56px;height:56px;border-radius:12px;background:#fff;border:1px solid var(--border);display:grid;place-items:center}
+.icon-label{font-weight:800;text-align:center;font-size:11px}
+
+/* Windows */
+.window{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(1000px,94vw);height:min(680px,82vh);display:none;grid-template-rows:auto 1fr;background:var(--glass);border:1px solid var(--border);border-radius:12px;z-index:1100}
+.window.show{display:grid}
+.winbar{display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--winbarBg);border-bottom:1px solid var(--border)}
+.win-title{font-weight:900}
+.win-actions{display:flex;gap:6px}
+.win-btn{min-width:32px;height:32px;border-radius:10px;border:1px solid var(--border);background:#fff;display:grid;place-items:center}
+.content{padding:10px;overflow:auto}
+
+/* Auth */
+.auth-wrap{position:fixed;inset:0;z-index:1200;background:#ffffff;display:grid;place-items:center}
+.auth-card{width:min(980px,92vw);display:grid;grid-template-columns:1.1fr .9fr;gap:18px}
+.auth-left{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+.auth-right{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;display:grid;place-items:center}
+.auth-greet{font-size:28px;font-weight:900;margin-bottom:12px}
+.auth-avatar{width:96px;height:96px;border-radius:50%;border:2px dashed #cbd5e1;background:#f8fafc;display:grid;place-items:center;margin-bottom:12px}
+.auth-actions{display:flex;gap:10px;margin-top:14px}
+.auth-btn{min-width:140px;height:42px;border-radius:10px;border:1px solid var(--border);background:#fff;font-weight:700}
+.auth-photo{width:360px;height:270px;border-radius:10px;border:2px dashed #cbd5e1;background:#f8fafc;display:grid;place-items:center;color:#64748b}
+
+/* Toast */
+#toast{position:fixed;right:20px;bottom:90px;background:#111;color:#fff;padding:12px 14px;border-radius:10px;z-index:2000;display:none;font-weight:800}
+</style>
+</head>
+<body>
+
+<!-- Wallpapers + central clock -->
+<div id="wall" class="wall waves"></div>
+<div id="centralClock"></div>
+
+<!-- Taskbar -->
+<div class="taskbar">
+  <div class="start-btn" onclick="toggleStart()">Пуск</div>
+  <div class="tb-center" id="tbCenter"></div>
+  <div class="tb-right">
+    <div class="sys-chip" id="clockChip"></div>
+    <div class="sys-chip" onclick="openWin('settings')">⚙ Настройки</div>
+  </div>
+</div>
+
+<!-- Start menu -->
+<div id="start" class="start">
+  <div class="start-top"><b>Пуск</b><input id="startSearch" placeholder="Поиск"/></div>
+  <div class="start-grid" id="startGrid"></div>
+</div>
+
+<!-- Desktop -->
+<div class="desktop"><div id="iconGrid" class="icon-grid"></div></div>
+
+<!-- Windows -->
+<div id="win-settings" class="window">
+  <div class="winbar"><div class="win-title"><b>Настройки</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('settings')">✕</div></div></div>
+  <div class="content">
+    <h3>Обои</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="win-btn" onclick="setWall('waves')">Waves</button>
+      <button class="win-btn" onclick="setWall('aurora')">Aurora</button>
+      <button class="win-btn" onclick="setWall('ocean')">Ocean</button>
+      <button class="win-btn" onclick="setWall('white')">White</button>
+      <button class="win-btn" onclick="setWall('black')">Black</button>
+      <button class="win-btn" onclick="setWall('red')">Red</button>
+    </div>
+    <h3 style="margin-top:16px">Темы</h3>
+    <div style="display:flex;gap:8px">
+      <button class="win-btn" onclick="applyTheme('light')">Светлая</button>
+      <button class="win-btn" onclick="applyTheme('dark')">Тёмная</button>
+      <button class="win-btn" onclick="applyTheme('blue')">Синяя</button>
+    </div>
+    <h3 style="margin-top:16px">Анимации</h3>
+    <div style="display:flex;gap:8px">
+      <button class="win-btn" onclick="toggleClockPulse()">Пульсация часов</button>
+      <button class="win-btn" onclick="showToast('Настройки применены')">Показать тост</button>
+    </div>
+  </div>
+</div>
+
+<div id="win-terminal" class="window">
+  <div class="winbar"><div class="win-title"><b>Терминал</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('terminal')">✕</div></div></div>
+  <div class="content" style="display:grid;grid-template-rows:1fr auto;gap:8px">
+    <div id="termOut" style="border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff;overflow:auto"></div>
+    <div style="display:flex;gap:8px">
+      <input id="termIn" placeholder="команда (help)"/>
+      <button class="win-btn" onclick="termRun()">Run</button>
+    </div>
+  </div>
+</div>
+
+<div id="win-notes" class="window">
+  <div class="winbar"><div class="win-title"><b>Заметки</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('notes')">✕</div></div></div>
+  <div class="content">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input id="noteTitle" placeholder="Заголовок"/>
+      <button class="win-btn" onclick="noteAdd()">Добавить</button>
+    </div>
+    <textarea id="noteBody" placeholder="Текст заметки"></textarea>
+    <div id="noteList" style="display:grid;gap:8px;margin-top:10px"></div>
+  </div>
+</div>
+
+<div id="win-wifi" class="window">
+  <div class="winbar"><div class="win-title"><b>Wi‑Fi</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('wifi')">✕</div></div></div>
+  <div class="content">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input id="wifiName" placeholder="SSID"/>
+      <input id="wifiPass" placeholder="Пароль"/>
+      <button class="win-btn" onclick="wifiSave()">Добавить</button>
+    </div>
+    <div id="wifiList" style="display:grid;gap:8px"></div>
+  </div>
+</div>
+
+<div id="win-chat" class="window">
+  <div class="winbar"><div class="win-title"><b>Чат</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('chat')">✕</div></div></div>
+  <div class="content" style="display:grid;grid-template-rows:auto 1fr auto;gap:8px">
+    <div style="display:flex;gap:8px">
+      <input id="dmTo" placeholder="Получатель"/>
+      <button class="win-btn" onclick="dmOpen()">Открыть</button>
+    </div>
+    <div id="chatView" style="border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff;overflow:auto"></div>
+    <div style="display:flex;gap:8px">
+      <input id="chatMsg" placeholder="Сообщение"/>
+      <button class="win-btn" onclick="sendChat()">▶</button>
+    </div>
+  </div>
+</div>
+
+<div id="win-files" class="window">
+  <div class="winbar"><div class="win-title"><b>Проводник</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('files')">✕</div></div></div>
+  <div class="content" style="display:grid;grid-template-columns:240px 1fr;gap:12px">
+    <div id="fsSidebar" style="border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff"></div>
+    <div style="border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <button class="win-btn" onclick="fsNewFolder()">📁</button>
+        <button class="win-btn" onclick="fsNewFile()">📄</button>
+        <button class="win-btn" onclick="fsDelete()">🗑</button>
+      </div>
+      <div id="fsMain"></div>
+    </div>
+  </div>
+</div>
+
+<div id="win-youtube" class="window">
+  <div class="winbar"><div class="win-title"><b>YouTube</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('youtube')">✕</div></div></div>
+  <div class="content">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input id="ytUrl" placeholder="Ссылка на видео YouTube"/>
+      <button class="win-btn" onclick="ytPlay()">▶</button>
+    </div>
+    <iframe id="ytFrame" width="100%" height="420" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+  </div>
+</div>
+
+<div id="win-timer" class="window">
+  <div class="winbar"><div class="win-title"><b>Таймер</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('timer')">✕</div></div></div>
+  <div class="content">
+    <input id="timerSec" placeholder="Секунды" inputmode="numeric"/>
+    <button class="win-btn" onclick="timerStart()">Старт</button>
+    <button class="win-btn" onclick="timerStop()">Стоп</button>
+    <div id="timerView" class="mut" style="margin-top:8px">Ожидание…</div>
+  </div>
+</div>
+
+<div id="win-media" class="window">
+  <div class="winbar"><div class="win-title"><b>Медиа</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('media')">✕</div></div></div>
+  <div class="content">
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <input id="audioUrl" placeholder="Ссылка на аудио (mp3/ogg)"/>
+      <button class="win-btn" onclick="mediaPlay()">▶</button>
+      <button class="win-btn" onclick="mediaStop()">■</button>
+    </div>
+    <audio id="audioPlayer" crossorigin="anonymous"></audio>
+    <canvas id="audioViz" width="800" height="220" style="width:100%;height:220px;border:1px solid var(--border);border-radius:10px;background:#0f172a"></canvas>
+  </div>
+</div>
+
+<!-- Registration -->
+<div id="auth" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-left">
+      <div class="auth-greet">Добро пожаловать!</div>
+      <div class="auth-avatar">👤</div>
+      <input id="authName" placeholder="Введите имя"/>
+      <div class="auth-actions"><button class="auth-btn" onclick="authSubmit()">Войти</button></div>
+    </div>
+    <div class="auth-right"><div id="authPhoto" class="auth-photo">Фото</div></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+/* State & storage */
+const STORE_KEY='miniOS_v13';
+let state={
+  user:null, wall:'waves',
+  notes:[], wifi:[], chat:[], dmWith:null,
+  fs:{ path:['Desktop'], tree:{
+    Desktop:{type:'folder',items:{}},
+    Documents:{type:'folder',items:{'Welcome.txt':{type:'file',content:'Добро пожаловать в Mini OS v13'}}},
+    Scripts:{type:'folder',items:{}},
+    Media:{type:'folder',items:{}}
+  }}
+};
+function save(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(state)); }catch(e){} }
+function load(){ try{ const raw=localStorage.getItem(STORE_KEY); if(raw){ state=Object.assign(state, JSON.parse(raw)); } }catch(e){} }
+load();
+
+/* Apps & desktop icons */
+const baseApps=[
+  {id:'settings',label:'Настройки',icon:'⚙',open:()=>openWin('settings')},
+  {id:'terminal',label:'Терминал',icon:'>_',open:()=>openWin('terminal')},
+  {id:'notes',label:'Заметки',icon:'📝',open:()=>openWin('notes')},
+  {id:'wifi',label:'Wi‑Fi',icon:'📶',open:()=>openWin('wifi')},
+  {id:'chat',label:'Чат',icon:'💬',open:()=>openWin('chat')},
+  {id:'files',label:'Проводник',icon:'🗂',open:()=>openWin('files')},
+  {id:'youtube',label:'YouTube',icon:'▶️',open:()=>openWin('youtube')},
+  {id:'timer',label:'Таймер',icon:'⏰',open:()=>openWin('timer')},
+  {id:'media',label:'Медиа',icon:'🎵',open:()=>openWin('media')}
+];
+let desktopIcons=[
+  {id:'settings',name:'Настройки',icon:'⚙'},{id:'terminal',name:'Терминал',icon:'>_'},
+  {id:'notes',name:'Заметки',icon:'📝'},{id:'wifi',name:'Wi‑Fi',icon:'📶'},
+  {id:'chat',name:'Чат',icon:'💬'},{id:'files',name:'Проводник',icon:'🗂'},
+  {id:'youtube',name:'YouTube',icon:'▶️'},{id:'timer',name:'Таймер',icon:'⏰'},
+  {id:'media',name:'Медиа',icon:'🎵'}
+];
+
+/* Builders */
+function toggleStart(){document.getElementById('start').classList.toggle('show');}
+function buildStartMenu(){
+  const grid=document.getElementById('startGrid'); grid.innerHTML='';
+  baseApps.forEach(a=>{
+    const t=document.createElement('div'); t.className='tile'; t.textContent=a.label; t.onclick=a.open;
+    grid.appendChild(t);
+  });
+}
+function buildTaskbarCenter(){
+  const c=document.getElementById('tbCenter'); c.innerHTML='';
+  baseApps.forEach(a=>{
+    const i=document.createElement('div'); i.className='tb-icon'; i.textContent=a.icon; i.onclick=a.open;
+    c.appendChild(i);
+  });
+}
+function renderDesktop(){
+  const g=document.getElementById('iconGrid'); g.innerHTML='';
+  desktopIcons.forEach((d,idx)=>{
+    const el=document.createElement('div'); el.className='desktop-icon';
+    const col = idx % 6; const row = Math.floor(idx/6); // аккуратная сетка
+    el.style.top=(row*110)+'px'; el.style.left=(20+col*120)+'px';
+    el.onclick=()=>{const app=baseApps.find(a=>a.id===d.id); if(app) app.open();};
+    el.innerHTML=`<div class="icon-img">${d.icon}</div><div class="icon-label">${d.name}</div>`;
+    g.appendChild(el);
+  });
+}
+
+/* Windows control */
+function openWin(id){document.getElementById('win-'+id).classList.add('show');}
+function closeWin(id){document.getElementById('win-'+id).classList.remove('show');}
+
+/* Wallpapers & themes */
+function setWall(name){ state.wall=name; document.getElementById('wall').className='wall '+name; save(); showToast('Обои: '+name); }
+function applyTheme(name){
+  if(name==='dark'){
+    document.documentElement.style.setProperty('--taskbarBg','rgba(24,24,27,.85)');
+    document.documentElement.style.setProperty('--winbarBg','rgba(24,24,27,.92)');
+    document.documentElement.style.setProperty('--fg','#e5e7eb'); document.body.style.background='#0b0b0b';
+  }else if(name==='blue'){
+    document.documentElement.style.setProperty('--accent','#2563eb'); document.body.style.background='#eaf2ff';
+  }else{
+    document.documentElement.style.setProperty('--taskbarBg','rgba(255,255,255,.96)');
+    document.documentElement.style.setProperty('--winbarBg','rgba(255,255,255,.98)');
+    document.documentElement.style.setProperty('--fg','#0d1321'); document.body.style.background='#eef3ff';
+  }
+  showToast('Тема: '+name); save();
+}
+function toggleClockPulse(){
+  const el=document.getElementById('centralClock');
+  el.style.boxShadow = el.style.boxShadow ? '' : '0 0 0 12px rgba(37,99,235,.12)';
+}
+
+/* Clock & toast */
+function updateCentralClock(){
+  const d=new Date();
+  const hh=String(d.getHours()).padStart(2,'0');
+  const mm=String(d.getMinutes()).padStart(2,'0');
+  document.getElementById('centralClock').textContent=`${hh}:${mm}`;
+}
+setInterval(updateCentralClock,1000); updateCentralClock();
+function updateClockChip(){ document.getElementById('clockChip').textContent=new Date().toLocaleTimeString(); }
+setInterval(updateClockChip,1000); updateClockChip();
+function showToast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; setTimeout(()=>{t.style.display='none';},3000); }
+
+/* Terminal */
+function termPrint(s){ const out=document.getElementById('termOut'); const div=document.createElement('div'); div.textContent=s; out.appendChild(div); out.scrollTop=out.scrollHeight; }
+function termRun(){
+  const v=document.getElementById('termIn').value.trim(); if(!v) return;
+  const [cmd,...rest]=v.split(' '); const arg=rest.join(' ');
+  if(cmd==='help'){ termPrint('Команды: wall <waves|aurora|ocean|white|black|red>, open <app>, timer <sec>, youtube <url>'); }
+  else if(cmd==='wall'){ setWall(arg||'waves'); termPrint('Обои: '+(arg||'waves')); }
+  else if(cmd==='open'){ const app=baseApps.find(a=>a.id===arg); if(app){ app.open(); termPrint('Открыто: '+arg); } else termPrint('Нет приложения '+arg); }
+  else if(cmd==='timer'){ document.getElementById('timerSec').value=arg; openWin('timer'); timerStart(); termPrint('Таймер: '+arg+'с'); }
+  else if(cmd==='youtube'){ openWin('youtube'); document.getElementById('ytUrl').value=arg; ytPlay(); termPrint('YouTube: '+arg); }
+  else{ termPrint('Неизвестно: '+cmd); }
+  document.getElementById('termIn').value='';
+}
+
+/* Notes */
+function escapeHtml(s){ return s.replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m])); }
+function renderNotes(){
+  const root=document.getElementById('noteList'); if(!root) return; root.innerHTML='';
+  state.notes.forEach((n,i)=>{
+    const card=document.createElement('div'); card.style.border='1px solid var(--border)'; card.style.borderRadius='10px'; card.style.padding='10px'; card.style.background='#fff';
+    card.innerHTML=`<div><b>${escapeHtml(n.title)}</b></div><div>${escapeHtml(n.body)}</div>`;
+    const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px'; actions.style.marginTop='8px';
+    const edit=document.createElement('button'); edit.className='win-btn'; edit.textContent='✎'; edit.onclick=()=>{ const t=prompt('Заголовок', n.title)||n.title; const b=prompt('Текст', n.body)||n.body; state.notes[i]={title:t,body:b,ts:n.ts}; save(); renderNotes(); };
+    const del=document.createElement('button'); del.className='win-btn'; del.textContent='🗑'; del.onclick=()=>{ state.notes.splice(i,1); save(); renderNotes(); };
+    actions.appendChild(edit); actions.appendChild(del); card.appendChild(actions);
+    root.appendChild(card);
+  });
+}
+function noteAdd(){
+  const title=document.getElementById('noteTitle').value.trim();
+  const body=document.getElementById('noteBody').value.trim();
+  if(!title||!body){ showToast('Заполни заголовок и текст'); return; }
+  state.notes.unshift({title,body,ts:Date.now()}); document.getElementById('noteTitle').value=''; document.getElementById('noteBody').value='';
+  save(); renderNotes();
+}
+
+/* Wi-Fi */
+function wifiRender(){
+  const root=document.getElementById('wifiList'); if(!root) return; root.innerHTML='';
+  if(!state.wifi.length){ root.innerHTML='<div class="mut">Сетей нет</div>'; return; }
+  state.wifi.forEach((w,i)=>{
+    const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='8px'; row.style.border='1px solid var(--border)'; row.style.borderRadius='10px'; row.style.background='#fff';
+    row.innerHTML=`<div>📶 ${escapeHtml(w.ssid)}</div><div>${escapeHtml(w.pass)}</div>`;
+    const actions=document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px';
+    const edit=document.createElement('button'); edit.className='win-btn'; edit.textContent='✎'; edit.onclick=()=>{ const ssid=prompt('SSID', w.ssid)||w.ssid; const pass=prompt('Пароль', w.pass)||w.pass; state.wifi[i]={ssid,pass}; save(); wifiRender(); };
+    const del=document.createElement('button'); del.className='win-btn'; del.textContent='🗑'; del.onclick=()=>{ state.wifi.splice(i,1); save(); wifiRender(); };
+    actions.appendChild(edit); actions.appendChild(del); row.appendChild(actions);
+    root.appendChild(row);
+  });
+}
+function wifiSave(){
+  const ssid=document.getElementById('wifiName').value.trim(); const pass=document.getElementById('wifiPass').value.trim();
+  if(!ssid||!pass){ showToast('SSID и пароль'); return; }
+  state.wifi.push({ssid,pass}); document.getElementById('wifiName').value=''; document.getElementById('wifiPass').value='';
+  save(); wifiRender();
+}
+
+/* Chat */
+function dmOpen(){ const to=document.getElementById('dmTo').value.trim(); if(!to){ showToast('Укажи имя'); return; } state.dmWith=to; save(); renderChat(); }
+function renderChat(){
+  const view=document.getElementById('chatView'); if(!view) return; view.innerHTML='';
+  const withName=state.dmWith||'Глобальный'; const header=document.createElement('div'); header.className='mut'; header.textContent='Чат: '+withName; view.appendChild(header);
+  (state.chat||[]).filter(m=>!state.dmWith || m.to===state.dmWith).forEach(m=>{
+    const d=new Date(m.ts).toLocaleTimeString();
+    const row=document.createElement('div'); row.style.margin='6px 0';
+    row.innerHTML=`<div class="mut">${d} · ${escapeHtml(m.from)}${m.to?(' → '+escapeHtml(m.to)):''}</div><div>${escapeHtml(m.text)}</div>`;
+    view.appendChild(row);
+  });
+  view.scrollTop=view.scrollHeight;
+}
+function sendChat(){
+  const inp=document.getElementById('chatMsg'); const text=inp.value.trim(); if(!text) return;
+  state.chat.push({from:state.user||'User', to:state.dmWith||null, text, ts:Date.now()}); inp.value=''; save(); renderChat();
+}
+
+/* Explorer */
+function fsNodeAtPath(){
+  let node=state.fs.tree;
+  for(const seg of state.fs.path){
+    if(!node[seg]) return {};
+    node = node[seg].type==='folder' ? node[seg].items : node[seg];
+  }
+  return node;
+}
+function fsRender(){
+  const sidebar=document.getElementById('fsSidebar'); const main=document.getElementById('fsMain'); if(!sidebar||!main) return;
+  sidebar.innerHTML='';
+  Object.keys(state.fs.tree).forEach(name=>{
+    const btn=document.createElement('div'); btn.textContent=name; btn.style.padding='8px'; btn.style.borderRadius='8px'; btn.style.cursor='pointer';
+    btn.onclick=()=>{ state.fs.path=[name]; fsRender(); };
+    sidebar.appendChild(btn);
+  });
+  main.innerHTML='';
+  const items=fsNodeAtPath();
+  Object.keys(items).forEach(name=>{
+    const it=items[name];
+    const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='8px'; row.style.borderBottom='1px solid rgba(0,0,0,.08)';
+    const left=document.createElement('div'); left.textContent=(it.type==='folder'?'📁 ':'📄 ')+name;
+    const right=document.createElement('div');
+    const openBtn=document.createElement('button'); openBtn.className='win-btn'; openBtn.textContent='Открыть';
+    openBtn.onclick=()=>{ if(it.type==='folder'){ state.fs.path.push(name); fsRender(); } else { alert(it.content||'Пусто'); } };
+    const renameBtn=document.createElement('button'); renameBtn.className='win-btn'; renameBtn.textContent='✎';
+    renameBtn.onclick=()=>{
+      const newName=prompt('Новое имя', name); if(!newName||newName===name) return;
+      if(items[newName]){ showToast('Имя занято'); return; }
+      items[newName]=it; delete items[name]; save(); fsRender();
+    };
+    const delBtn=document.createElement('button'); delBtn.className='win-btn'; delBtn.textContent='🗑';
+    delBtn.onclick=()=>{ delete items[name]; save(); fsRender(); };
+    right.appendChild(openBtn); right.appendChild(renameBtn); right.appendChild(delBtn);
+    row.appendChild(left); row.appendChild(right); main.appendChild(row);
+  });
+  if(state.fs.path.length>1){
+    const up=document.createElement('div'); up.style.marginTop='8px';
+    const btn=document.createElement('button'); btn.className='win-btn'; btn.textContent='⬅ Назад';
+    btn.onclick=()=>{ state.fs.path.pop(); fsRender(); };
+    up.appendChild(btn); main.appendChild(up);
+  }
+}
+function fsNewFolder(){
+  const name=prompt('Имя папки','Новая папка'); if(!name) return;
+  const items=fsNodeAtPath(); if(items[name]){ showToast('Уже существует'); return; }
+  items[name]={type:'folder', items:{}}; save(); fsRender();
+}
+function fsNewFile(){
+  const name=prompt('Имя файла','Новый файл.txt'); if(!name) return;
+  const items=fsNodeAtPath(); if(items[name]){ showToast('Уже существует'); return; }
+  const content=prompt('Содержимое',''); items[name]={type:'file', content:content||''}; save(); fsRender();
+}
+function fsDelete(){
+  const name=prompt('Удалить объект (имя)',''); if(!name) return;
+  const items=fsNodeAtPath(); if(!items[name]){ showToast('Не найдено'); return; }
+  delete items[name]; save(); fsRender();
+}
+
+/* Multimedia */
+function ytPlay(){
+  const url=document.getElementById('ytUrl').value.trim(); if(!url){ showToast('Вставь ссылку'); return; }
+  let embed=url;
+  if(url.includes('watch')) embed=url.replace('watch?v=','embed/');
+  else if(url.includes('youtu.be')) embed='https://www.youtube.com/embed/'+url.split('/').pop();
+  document.getElementById('ytFrame').src=embed;
+}
+let timerId=null, timerEnd=0;
+function timerStart(){
+  const sec=parseInt(document.getElementById('timerSec').value,10); if(!sec||sec<=0){ showToast('Укажи секунды'); return; }
+  timerStop(); timerEnd=Date.now()+sec*1000;
+  timerId=setInterval(()=>{
+    const left=Math.max(0,Math.floor((timerEnd-Date.now())/1000));
+    document.getElementById('timerView').textContent=left>0?`Осталось: ${left} сек.`:'Готово';
+    if(left<=0){ timerStop(); showToast('⏰ Таймер окончен'); }
+  },200);
+}
+function timerStop(){ if(timerId){ clearInterval(timerId); timerId=null; } }
+let audioCtx=null, analyser=null, sourceNode=null, vizId=null;
+function mediaPlay(){
+  const url=document.getElementById('audioUrl').value.trim(); if(!url){ showToast('Укажи URL'); return; }
+  const audio=document.getElementById('audioPlayer'); audio.src=url; audio.play().catch(()=>{});
+  if(!audioCtx){ audioCtx=new (window.AudioContext||window.webkitAudioContext)(); }
+  if(sourceNode) sourceNode.disconnect();
+  sourceNode=audioCtx.createMediaElementSource(audio);
+  analyser=audioCtx.createAnalyser(); analyser.fftSize=1024;
+  sourceNode.connect(analyser); analyser.connect(audioCtx.destination);
+  startViz();
+}
+function mediaStop(){ const audio=document.getElementById('audioPlayer'); audio.pause(); audio.currentTime=0; stopViz(); }
+function startViz(){
+  const canvas=document.getElementById('audioViz'); const ctx=canvas.getContext('2d');
+  const bufferLength=analyser.frequencyBinCount; const data=new Uint8Array(bufferLength);
+  function draw(){
+    vizId=requestAnimationFrame(draw);
+    analyser.getByteFrequencyData(data);
+    ctx.fillStyle='#0f172a'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    const barWidth=(canvas.width/bufferLength)*2.5; let x=0;
+    for(let i=0;i<bufferLength;i++){
+      const barHeight=data[i]/2; ctx.fillStyle=`rgb(${barHeight+100},50,150)`;
+      ctx.fillRect(x,canvas.height-barHeight,barWidth,barHeight); x+=barWidth+1;
+    }
+  } draw();
+}
+function stopViz(){ if(vizId){ cancelAnimationFrame(vizId); vizId=null; } }
+
+/* Registration */
+function authSubmit(){
+  const name=document.getElementById('authName').value.trim();
+  if(!name){ alert('Введите имя'); return; }
+  state.user=name; save();
+  document.getElementById('auth').style.display='none';
+  showToast('Добро пожаловать, '+name+'!');
+}
+function randomPhoto(){
+  const p=document.getElementById('authPhoto');
+  const imgs=['🌄','🏞','🌆','🌌','🌉','🏖'];
+  p.textContent=imgs[Math.floor(Math.random()*imgs.length)];
+}
+randomPhoto();
+
+/* Sync across tabs */
+window.addEventListener('storage', (e)=>{
+  if(e.key===STORE_KEY){
+    load(); renderNotes(); wifiRender(); renderChat(); fsRender();
+  }
+});
+
+/* Init */
+(function init(){
+  setWall(state.wall||'waves');
+  buildStartMenu(); buildTaskbarCenter(); renderDesktop();
+  renderNotes(); wifiRender(); renderChat(); fsRender();
+})();
+</script>
+</body>
+</html>
+<style>
+/* Creator badge */
+.creator-badge{
+  display:inline-flex; align-items:center; gap:6px;
+  background:#fff8db; color:#b08900; border:1px solid #f0d96a;
+  padding:4px 8px; border-radius:999px; font-weight:800; font-size:12px;
+}
+
+/* Orbit avatar (yellow ring) */
+.creator-orbit{
+  position:relative; width:28px; height:28px; border-radius:50%; background:#fff;
+  display:inline-grid; place-items:center; margin-left:8px;
+}
+.creator-orbit::before{
+  content:''; position:absolute; inset:-3px; border:2px solid #ffd000; border-radius:50%;
+  animation:orbitRotate 2.2s linear infinite;
+}
+@keyframes orbitRotate{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+</style><script>
+/* ===== Admin & secrets state ===== */
+if (typeof state==='undefined') window.state={};
+state.userRole = state.userRole || 'user';       // 'user' | 'admin' | 'creator'
+state.isCreator = state.isCreator ?? true;       // твоя метка создателя (можно выключить)
+state.pinEnabled = state.pinEnabled ?? false;
+state.pinCode = state.pinCode ?? '';
+state.secretApps = state.secretApps || [];       // {id,label,icon}
+state.secretScripts = state.secretScripts || [   // демонстрационные «скрипты»
+  {id:'hello', title:'Hello world', desc:'Печать в терминал'},
+  {id:'spark', title:'Spark', desc:'Показ тоста и смена темы'}
+];
+save?.();
+</script><script>
+/* ===== Create Admin Panel & Secrets windows ===== */
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-admin" class="window">
+    <div class="winbar"><div class="win-title"><b>Админ‑панель</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('admin')">✕</div></div>
+    </div>
+    <div class="content" style="display:grid;grid-template-columns:300px 1fr;gap:12px">
+      <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff">
+        <h4>Статус</h4>
+        <div id="adminStatus" class="mut"></div>
+        <h4>PIN</h4>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label><input type="checkbox" id="pinEnable"> Включить PIN</label>
+          <input id="pinValue" placeholder="PIN (4-8 цифр)" style="width:140px"/>
+          <button class="win-btn" onclick="pinSave()">Сохранить</button>
+        </div>
+        <h4 style="margin-top:12px">Создатель</h4>
+        <label><input type="checkbox" id="creatorToggle"> Показывать метку [Создатель]</label>
+      </div>
+      <div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:#fff">
+        <h4>Секретные приложения</h4>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <input id="secretId" placeholder="id" style="width:140px"/>
+          <input id="secretLabel" placeholder="label" style="width:180px"/>
+          <input id="secretIcon" placeholder="icon (emoji)" style="width:100px"/>
+          <button class="win-btn" onclick="secretAdd()">Добавить</button>
+        </div>
+        <div id="secretList" style="display:grid;gap:8px"></div>
+        <h4 style="margin-top:12px">Секретные скрипты</h4>
+        <div id="scriptsList" style="display:grid;gap:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="win-secret" class="window">
+    <div class="winbar"><div class="win-title"><b>Секреты</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('secret')">✕</div></div>
+    </div>
+    <div class="content">
+      <div id="secretRunArea" class="mut">Выберите скрипт в админ‑панели</div>
+    </div>
+  </div>
+`);
+</script><script>
+/* ===== Bind Admin app (visible only for admin/creator) ===== */
+(function bindAdmin(){
+  const showAdmin = (state.userRole==='admin' || state.userRole==='creator');
+  if (showAdmin && !baseApps.find(a=>a.id==='admin')){
+    baseApps.push({id:'admin',label:'Админ‑панель',icon:'🛡',open:()=>openWin('admin')});
+    baseApps.push({id:'secret',label:'Секреты',icon:'🗝',open:()=>openWin('secret')});
+    buildStartMenu?.(); buildTaskbarCenter?.();
+  }
+  // Desktop icons placing (optional)
+  if (showAdmin && !desktopIcons.find(i=>i.id==='admin')){
+    desktopIcons.push({id:'admin',name:'Админ‑панель',icon:'🛡'});
+    desktopIcons.push({id:'secret',name:'Секреты',icon:'🗝'});
+    renderDesktop?.();
+  }
+})();
+
+/* ===== Enhance Settings dynamically (PIN section quick link) ===== */
+(function enhanceSettingsUI(){
+  const settings = document.querySelector('#win-settings .content');
+  if (!settings || settings.dataset.adminEnhanced) return;
+  const block = document.createElement('div');
+  block.style.marginTop='16px';
+  block.innerHTML = `
+    <h3>Безопасность</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="win-btn" onclick="openWin('admin')">Открыть админ‑панель</button>
+      <span class="mut">Настройка PIN, секретов и меток создателя</span>
+    </div>
+  `;
+  settings.appendChild(block);
+  settings.dataset.adminEnhanced='1';
+})();
+</script><script>
+/* ===== Admin panel logic ===== */
+function adminRender(){
+  const st = document.getElementById('adminStatus');
+  if (st) st.textContent = `Роль: ${state.userRole} · PIN: ${state.pinEnabled ? 'включён' : 'выключен'}`;
+  const pe = document.getElementById('pinEnable'); const pv = document.getElementById('pinValue');
+  if (pe) pe.checked = !!state.pinEnabled;
+  if (pv) pv.value = state.pinCode || '';
+  const ct = document.getElementById('creatorToggle'); if (ct) ct.checked = !!state.isCreator;
+
+  const list = document.getElementById('secretList'); if (list){ list.innerHTML='';
+    state.secretApps.forEach((app,idx)=>{
+      const row = document.createElement('div');
+      row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center';
+      row.style.border='1px solid var(--border)'; row.style.borderRadius='10px'; row.style.padding='8px'; row.style.background='#fff';
+      row.innerHTML = `<div>${app.icon||'🗝'} ${app.label} <span class="mut">(${app.id})</span></div>`;
+      const actions = document.createElement('div'); actions.style.display='flex'; actions.style.gap='8px';
+      const openBtn = document.createElement('button'); openBtn.className='win-btn'; openBtn.textContent='Открыть';
+      openBtn.onclick = ()=> openSecretApp(app.id);
+      const delBtn = document.createElement('button'); delBtn.className='win-btn'; delBtn.textContent='🗑';
+      delBtn.onclick = ()=>{ state.secretApps.splice(idx,1); save(); adminRender(); };
+      actions.appendChild(openBtn); actions.appendChild(delBtn); row.appendChild(actions);
+      list.appendChild(row);
+    });
+  }
+  const sList = document.getElementById('scriptsList'); if (sList){ sList.innerHTML='';
+    state.secretScripts.forEach(scr=>{
+      const card = document.createElement('div');
+      card.style.border='1px solid var(--border)'; card.style.borderRadius='10px';
+      card.style.padding='8px'; card.style.background='#fff';
+      card.innerHTML = `<b>${scr.title}</b><div class="mut">${scr.desc}</div>`;
+      const run = document.createElement('button'); run.className='win-btn'; run.textContent='Запустить';
+      run.onclick = ()=> secretRun(scr.id);
+      card.appendChild(run); sList.appendChild(card);
+    });
+  }
+}
+function openSecretApp(id){
+  // Демонстрация: просто показываем окно "Секреты" с меткой запущенного приложения
+  openWin('secret');
+  const area = document.getElementById('secretRunArea');
+  area.textContent = `Секретное приложение запущено: ${id}`;
+}
+function secretAdd(){
+  const id = document.getElementById('secretId').value.trim();
+  const label = document.getElementById('secretLabel').value.trim();
+  const icon = document.getElementById('secretIcon').value.trim() || '🗝';
+  if (!id || !label){ showToast('Укажи id и label'); return; }
+  state.secretApps.push({id,label,icon}); save(); adminRender(); showToast('Добавлено секретное приложение');
+}
+function secretRun(id){
+  openWin('secret');
+  const area = document.getElementById('secretRunArea');
+  if (id==='hello'){ area.textContent = 'Hello from secret script!'; showToast('Скрипт: hello'); }
+  else if (id==='spark'){ applyTheme?.('blue'); showToast('Spark применил синюю тему'); }
+  else { area.textContent = 'Неизвестный скрипт: '+id; }
+}
+function pinSave(){
+  const enabled = document.getElementById('pinEnable').checked;
+  const code = document.getElementById('pinValue').value.trim();
+  if (enabled && (!code || code.length<4 || code.length>8 || !/^\d+$/.test(code))){
+    showToast('PIN: 4-8 цифр'); return;
+  }
+  state.pinEnabled = enabled; state.pinCode = enabled ? code : '';
+  save(); adminRender(); showToast('PIN обновлён');
+}
+document.getElementById('win-admin')?.addEventListener('transitionend', adminRender);
+adminRender();
+
+/* ===== PIN guard for sensitive apps ===== */
+const sensitiveIds = new Set(['files','notes','chat','wifi','secret','admin']);
+function guardOpen(appId, openFn){
+  if (!state.pinEnabled || !sensitiveIds.has(appId)) return openFn();
+  const pin = prompt('Введите PIN'); if (pin===state.pinCode){ return openFn(); }
+  showToast('Неверный PIN'); return;
+}
+// Rebind open functions to guard
+baseApps.forEach(a=>{
+  const original = a.open;
+  a.open = ()=> guardOpen(a.id, original);
+});
+buildStartMenu?.(); buildTaskbarCenter?.();
+</script><script>
+/* ===== Override renderChat to add creator badge & orbit avatar ===== */
+const prevRenderChat = typeof renderChat==='function' ? renderChat : null;
+function renderChat(){
+  const view=document.getElementById('chatView'); if(!view) return; view.innerHTML='';
+  const withName=state.dmWith||'Глобальный';
+  const header=document.createElement('div'); header.className='mut';
+  header.innerHTML = `Чат: ${withName}
+    ${state.isCreator ? `<span class="creator-badge">Создатель <span class="creator-orbit">👤</span></span>` : ''}`;
+  view.appendChild(header);
+
+  (state.chat||[]).filter(m=>!state.dmWith || m.to===state.dmWith).forEach(m=>{
+    const d=new Date(m.ts).toLocaleTimeString();
+    const isCreatorMsg = state.isCreator && m.from===(state.user||'User');
+    const row=document.createElement('div'); row.style.margin='8px 0';
+    row.innerHTML = `
+      <div class="mut">
+        ${d} · ${isCreatorMsg ? `<span class="creator-badge">Создатель</span>` : ''} ${m.from}${m.to?(' → '+m.to):''}
+      </div>
+      <div>${m.text}</div>
+    `;
+    view.appendChild(row);
+  });
+  view.scrollTop=view.scrollHeight;
+}
+if (prevRenderChat) { /* keep signature, but we fully override with badge support */ }
+renderChat();
+</script><script>
+/* ===== Admin terminal commands ===== */
+const prevTermRun = typeof termRun==='function' ? termRun : null;
+function termRun(){
+  const v=document.getElementById('termIn')?.value.trim(); if(!v){ prevTermRun?.(); return; }
+  const [cmd,...rest]=v.split(' '); const arg=rest.join(' ');
+
+  // Admin and power commands
+  if (cmd==='apps'){ termPrint?.('Приложения: '+baseApps.map(a=>a.id).join(', ')); }
+  else if (cmd==='theme'){ applyTheme?.(arg||'light'); termPrint?.('Тема: '+(arg||'light')); }
+  else if (cmd==='clock'){
+    if(arg==='off'){ document.getElementById('centralClock').style.display='none'; termPrint?.('Часы скрыты'); }
+    else { document.getElementById('centralClock').style.display='block'; termPrint?.('Часы включены'); }
+  }
+  else if (cmd==='user'){ state.user=arg||'User'; save?.(); termPrint?.('Имя пользователя: '+state.user); }
+  else if (cmd==='role'){ state.userRole = arg||'admin'; save?.(); termPrint?.('Роль: '+state.userRole); bindAdmin?.(); }
+  else if (cmd==='creator'){ state.isCreator = (arg!=='off'); save?.(); termPrint?.('Метка создателя: '+(state.isCreator?'on':'off')); renderChat?.(); }
+  else if (cmd==='pin'){
+    if(arg.startsWith('on')){ const code = arg.split(' ')[1]||prompt('PIN (4-8 цифр)',''); document.getElementById('pinValue').value=code||''; document.getElementById('pinEnable').checked=true; pinSave(); termPrint?.('PIN включён'); }
+    else { document.getElementById('pinEnable').checked=false; document.getElementById('pinValue').value=''; pinSave(); termPrint?.('PIN выключен'); }
+  }
+  else if (cmd==='secret'){
+    const sub = rest[0]||'list';
+    if (sub==='list'){ termPrint?.('Секретные приложения: '+(state.secretApps.map(x=>x.id).join(', ')||'нет')); }
+    else if (sub==='add'){ const id=rest[1], label=rest[2]||id, icon=rest[3]||'🗝'; if(!id){ termPrint?.('secret add <id> <label?> <icon?>'); }
+      else { state.secretApps.push({id,label,icon}); save?.(); adminRender?.(); termPrint?.('Добавлено: '+id); } }
+    else if (sub==='run'){ const id=rest[1]; if(!id){ termPrint?.('secret run <scriptId>'); }
+      else { secretRun?.(id); termPrint?.('Скрипт запущен: '+id); } }
+    else if (sub==='open'){ const id=rest[1]; if(!id){ termPrint?.('secret open <appId>'); }
+      else { openSecretApp?.(id); termPrint?.('Секретное приложение: '+id); } }
+    else { termPrint?.('secret <list|add|run|open>'); }
+  }
+  else if (cmd==='reset'){
+    state.notes=[]; state.wifi=[]; state.chat=[]; state.fs.path=['Desktop']; state.fs.tree.Desktop.items={}; save?.();
+    renderNotes?.(); wifiRender?.(); renderChat?.(); fsRender?.();
+    termPrint?.('Система сброшена');
+  }
+  else if (cmd==='fs'){
+    const sub=rest[0]||'list'; const name=rest[1]||'';
+    if (sub==='list'){ termPrint?.('Содержимое: '+Object.keys(fsNodeAtPath?.()||{}).join(', ')); }
+    else if (sub==='newfile'){ if(!name){ termPrint?.('fs newfile <имя>'); } else { const items=fsNodeAtPath?.(); if(items[name]){ termPrint?.('Уже существует'); } else { items[name]={type:'file',content:''}; save?.(); fsRender?.(); termPrint?.('Создан файл: '+name); } } }
+    else if (sub==='newfolder'){ if(!name){ termPrint?.('fs newfolder <имя>'); } else { const items=fsNodeAtPath?.(); if(items[name]){ termPrint?.('Уже существует'); } else { items[name]={type:'folder',items:{}}; save?.(); fsRender?.(); termPrint?.('Создана папка: '+name); } } }
+    else if (sub==='delete'){ if(!name){ termPrint?.('fs delete <имя>'); } else { const items=fsNodeAtPath?.(); if(!items[name]){ termPrint?.('Не найдено'); } else { delete items[name]; save?.(); fsRender?.(); termPrint?.('Удалено: '+name); } } }
+    else { termPrint?.('fs <list|newfile|newfolder|delete>'); }
+  }
+  else {
+    // fallback to existing handler for non-admin commands
+    if (prevTermRun) return prevTermRun();
+    termPrint?.('help: wall, open, timer, youtube, apps, theme, clock, user, role, creator, pin, secret, reset, fs');
+  }
+  document.getElementById('termIn').value='';
+}
+</script><script>
+/* ===== Auto-init after append ===== */
+(function afterAdminAppend(){
+  adminRender?.();
+  buildStartMenu?.(); buildTaskbarCenter?.(); renderDesktop?.(); renderChat?.();
+  showToast?.('Админ расширения загружены');
+})();
+</script><script>
+state.activityLog = state.activityLog || [];
+
+function logAction(msg){
+  state.activityLog.push({msg,ts:Date.now()});
+  save?.();
+}
+
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-log" class="window">
+    <div class="winbar"><div class="win-title"><b>Логи</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('log')">✕</div></div>
+    </div>
+    <div class="content"><div id="logView"></div></div>
+  </div>
+`);
+
+baseApps.push({id:'log',label:'Логи',icon:'📜',open:()=>openWin('log')});
+desktopIcons.push({id:'log',name:'Логи',icon:'📜'});
+buildStartMenu?.(); renderDesktop?.();
+
+function renderLog(){
+  const root=document.getElementById('logView'); if(!root) return;
+  root.innerHTML='';
+  state.activityLog.forEach(e=>{
+    const d=new Date(e.ts).toLocaleTimeString();
+    root.innerHTML += `<div>${d} · ${e.msg}</div>`;
+  });
+}
+</script><script>
+state.secretNotes = state.secretNotes || [];
+
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-secretNotes" class="window">
+    <div class="winbar"><div class="win-title"><b>Секретные заметки</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('secretNotes')">✕</div></div>
+    </div>
+    <div class="content">
+      <textarea id="secretNoteText" placeholder="Новая заметка"></textarea>
+      <button class="win-btn" onclick="secretNoteAdd()">Добавить</button>
+      <div id="secretNotesList"></div>
+    </div>
+  </div>
+`);
+
+function secretNoteAdd(){
+  const txt=document.getElementById('secretNoteText').value.trim();
+  if(!txt) return;
+  state.secretNotes.push({txt,ts:Date.now()});
+  document.getElementById('secretNoteText').value='';
+  save?.(); renderSecretNotes();
+}
+function renderSecretNotes(){
+  const root=document.getElementById('secretNotesList'); if(!root) return;
+  root.innerHTML='';
+  state.secretNotes.forEach((n,i)=>{
+    const d=new Date(n.ts).toLocaleString();
+    root.innerHTML += `<div style="border:1px solid var(--border);padding:6px;margin:4px 0">${d}: ${n.txt}</div>`;
+  });
+}
+baseApps.push({id:'secretNotes',label:'Секретные заметки',icon:'🗒',open:()=>openWin('secretNotes')});
+</script><script>
+const prevTermRun2 = termRun;
+function termRun(){
+  const v=document.getElementById('termIn')?.value.trim(); if(!v){ prevTermRun2?.(); return; }
+  const [cmd,...rest]=v.split(' '); const arg=rest.join(' ');
+  if(cmd==='log'){ openWin('log'); renderLog(); termPrint?.('Открыт лог'); }
+  else if(cmd==='secretNotes'){ openWin('secretNotes'); renderSecretNotes(); termPrint?.('Открыты секретные заметки'); }
+  else { prevTermRun2?.(); }
+  document.getElementById('termIn').value='';
+}
+</script><script>
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-sysinfo" class="window">
+    <div class="winbar"><div class="win-title"><b>Системная информация</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('sysinfo')">✕</div></div>
+    </div>
+    <div class="content" id="sysinfoView"></div>
+  </div>
+`);
+baseApps.push({id:'sysinfo',label:'Система',icon:'💻',open:()=>openWin('sysinfo')});
+function renderSysinfo(){
+  const v=document.getElementById('sysinfoView');
+  v.innerHTML = `
+    <div>Пользователь: ${state.user||'—'}</div>
+    <div>Роль: ${state.userRole||'user'}</div>
+    <div>Браузер: ${navigator.userAgent}</div>
+    <div>Время: ${new Date().toLocaleString()}</div>
+  `;
+}
+</script><script>
+/* ===== Отключаем повторную регистрацию ===== */
+if(state.user && document.getElementById('auth')){
+  document.getElementById('auth').style.display='none';
+}
+</script><script>
+/* ===== Отключаем повторную регистрацию ===== */
+if(state.user && document.getElementById('auth')){
+  document.getElementById('auth').style.display='none';
+}
+</script><script>
+function showApp(id,label,icon){
+  baseApps.push({id,label,icon,open:()=>openWin(id)});
+  desktopIcons.push({id,name:label,icon});
+  buildStartMenu?.(); buildTaskbarCenter?.(); renderDesktop?.();
+}
+const prevTermRunShow = termRun;
+function termRun(){
+  const v=document.getElementById('termIn')?.value.trim(); 
+  if(!v){ prevTermRunShow?.(); return; }
+  const [cmd,...rest]=v.split(' ');
+  const arg=rest.join(' ');
+  if(cmd==='show'){
+    if(!arg){ termPrint?.('Использование: show <имя>'); }
+    else{
+      // пример: show notes
+      if(arg==='notes') showApp('notes','Заметки','📝');
+      else if(arg==='wifi') showApp('wifi','Wi‑Fi','📶');
+      else termPrint?.('Неизвестное приложение: '+arg);
+    }
+  }
+  else { prevTermRunShow?.(); }
+  document.getElementById('termIn').value='';
+}
+</script><style>
+/* Explorer 2.0 styles */
+.fs2-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.fs2-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(0,0,0,.08)}
+.fs2-badge{display:inline-block;padding:2px 6px;border-radius:6px;font-size:12px;font-weight:800;border:1px solid var(--border);background:#fff}
+.fs2-type-folder{color:#0ea5e9}
+.fs2-type-file{color:#16a34a}
+.fs2-view{border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff}
+</style>
+
+<script>
+/* ===== Explorer 2.0: state ===== */
+state.fs2 = state.fs2 || {
+  path:['Desktop'],
+  tree:{
+    Desktop:{type:'folder',items:{
+      'Readme.txt':{type:'file',kind:'doc',content:'Это Проводник 2.0. Добро пожаловать!'}
+    }},
+    Documents:{type:'folder',items:{
+      'Notes.txt':{type:'file',kind:'doc',content:'Заметка #1'}
+    }},
+    Scripts:{type:'folder',items:{
+      'hello.scr':{type:'file',kind:'script',content:'print Hello from Script'}
+    }},
+    Media:{type:'folder',items:{
+      'sample.mp3':{type:'file',kind:'media',content:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'}
+    }}
+  }
+};
+save?.();
+
+/* ===== Append window for Explorer 2.0 ===== */
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-explorer2" class="window">
+    <div class="winbar">
+      <div class="win-title"><b>Проводник 2.0</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('explorer2')">✕</div></div>
+    </div>
+    <div class="content" style="display:grid;grid-template-columns:260px 1fr;gap:12px">
+      <div class="fs2-view" id="fs2Sidebar"></div>
+      <div class="fs2-view">
+        <div class="fs2-toolbar">
+          <button class="win-btn" onclick="fs2NewFolder()">📁 Папка</button>
+          <button class="win-btn" onclick="fs2NewFile()">📄 Файл</button>
+          <button class="win-btn" onclick="fs2Delete()">🗑 Удалить</button>
+          <button class="win-btn" onclick="fs2Up()">⬅ Назад</button>
+        </div>
+        <div id="fs2Main"></div>
+      </div>
+    </div>
+  </div>
+`);
+
+/* ===== Register app and icon ===== */
+(function bindExplorer2(){
+  if(!baseApps.find(a=>a.id==='explorer2')){
+    baseApps.push({id:'explorer2',label:'Проводник 2.0',icon:'🗂️',open:()=>openWin('explorer2')});
+    buildStartMenu?.(); buildTaskbarCenter?.();
+  }
+  if(!desktopIcons.find(i=>i.id==='explorer2')){
+    desktopIcons.push({id:'explorer2',name:'Проводник 2.0',icon:'🗂️'});
+    renderDesktop?.();
+  }
+})();
+
+/* ===== Helpers ===== */
+function fs2NodeAtPath(){
+  let node=state.fs2.tree;
+  for(const seg of state.fs2.path){
+    if(!node[seg]) return {};
+    node = node[seg].type==='folder' ? node[seg].items : node[seg];
+  }
+  return node;
+}
+function fs2Roots(){ return Object.keys(state.fs2.tree); }
+
+/* ===== Render ===== */
+function fs2Render(){
+  const sidebar=document.getElementById('fs2Sidebar');
+  const main=document.getElementById('fs2Main');
+  if(!sidebar||!main) return;
+
+  // Sidebar roots
+  sidebar.innerHTML='';
+  fs2Roots().forEach(name=>{
+    const btn=document.createElement('div');
+    btn.className='fs2-item';
+    btn.innerHTML=`<div><span class="fs2-badge">root</span> ${name}</div>`;
+    btn.style.cursor='pointer';
+    btn.onclick=()=>{ state.fs2.path=[name]; fs2Render(); };
+    sidebar.appendChild(btn);
+  });
+
+  // Main list
+  main.innerHTML='';
+  const items=fs2NodeAtPath();
+  const keys=Object.keys(items);
+  if(!keys.length){
+    main.innerHTML='<div class="mut">Пусто</div>';
+  }else{
+    keys.forEach(name=>{
+      const it=items[name];
+      const row=document.createElement('div'); row.className='fs2-item';
+      const typeClass = it.type==='folder' ? 'fs2-type-folder' : 'fs2-type-file';
+      const kindBadge = it.type==='file' ? `<span class="fs2-badge">${it.kind||'file'}</span>` : `<span class="fs2-badge">folder</span>`;
+      row.innerHTML = `
+        <div class="${typeClass}">${it.type==='folder'?'📁':'📄'} ${name} ${kindBadge}</div>
+        <div>
+          <button class="win-btn" data-act="open">Открыть</button>
+          <button class="win-btn" data-act="rename">✎</button>
+          <button class="win-btn" data-act="delete">🗑</button>
+        </div>
+      `;
+      row.querySelector('[data-act="open"]').onclick=()=>fs2OpenItem(name,it);
+      row.querySelector('[data-act="rename"]').onclick=()=>fs2Rename(name,it);
+      row.querySelector('[data-act="delete"]').onclick=()=>{ delete items[name]; save?.(); fs2Render(); };
+      main.appendChild(row);
+    });
+  }
+}
+
+/* ===== Actions ===== */
+function fs2Up(){
+  if(state.fs2.path.length>1){ state.fs2.path.pop(); fs2Render(); }
+}
+function fs2NewFolder(){
+  const name=prompt('Имя папки','Новая папка'); if(!name) return;
+  const items=fs2NodeAtPath(); if(items[name]){ showToast?.('Уже существует'); return; }
+  items[name]={type:'folder',items:{}}; save?.(); fs2Render();
+}
+function fs2NewFile(){
+  const name=prompt('Имя файла','Новый файл.txt'); if(!name) return;
+  const kind=prompt('Тип (doc|script|media)','doc')||'doc';
+  const items=fs2NodeAtPath(); if(items[name]){ showToast?.('Уже существует'); return; }
+  let content='';
+  if(kind==='media'){ content=prompt('URL медиа (mp3/mp4/ogg/webm)','')||''; }
+  items[name]={type:'file',kind,content}; save?.(); fs2Render();
+}
+function fs2Delete(){
+  const name=prompt('Удалить объект (имя)',''); if(!name) return;
+  const items=fs2NodeAtPath(); if(!items[name]){ showToast?.('Не найдено'); return; }
+  delete items[name]; save?.(); fs2Render();
+}
+function fs2Rename(name,it){
+  const items=fs2NodeAtPath();
+  const newName=prompt('Новое имя',name); if(!newName||newName===name) return;
+  if(items[newName]){ showToast?.('Имя занято'); return; }
+  items[newName]=it; delete items[name]; save?.(); fs2Render();
+}
+
+/* ===== Open item handlers ===== */
+function fs2OpenItem(name,it){
+  const main=document.getElementById('fs2Main');
+  if(it.type==='folder'){ state.fs2.path.push(name); fs2Render(); return; }
+  main.innerHTML='';
+
+  if((it.kind||'doc')==='doc'){
+    // Text document editor
+    const editor=document.createElement('textarea'); editor.style.width='100%'; editor.style.height='320px'; editor.value=it.content||'';
+    const saveBtn=document.createElement('button'); saveBtn.className='win-btn'; saveBtn.textContent='💾 Сохранить';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    saveBtn.onclick=()=>{ it.content=editor.value; save?.(); showToast?.('Сохранено: '+name); fs2Render(); };
+    backBtn.onclick=fs2Render;
+    main.appendChild(editor); main.appendChild(saveBtn); main.appendChild(backBtn);
+  }
+  else if(it.kind==='script'){
+    // Script editor with safe "run" (no eval): prints to terminal and toast
+    const editor=document.createElement('textarea'); editor.style.width='100%'; editor.style.height='300px'; editor.value=it.content||'';
+    const saveBtn=document.createElement('button'); saveBtn.className='win-btn'; saveBtn.textContent='💾 Сохранить';
+    const runBtn=document.createElement('button'); runBtn.className='win-btn'; runBtn.textContent='▶ Запустить (safe)';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    saveBtn.onclick=()=>{ it.content=editor.value; save?.(); showToast?.('Скрипт сохранён: '+name); };
+    runBtn.onclick=()=>{ 
+      const code=editor.value.trim();
+      termPrint?.('[script] '+name+': '+(code.slice(0,160))+(code.length>160?'…':''));
+      showToast?.('Скрипт выполнен (лог): '+name);
+    };
+    backBtn.onclick=fs2Render;
+    main.appendChild(editor); main.appendChild(saveBtn); main.appendChild(runBtn); main.appendChild(backBtn);
+  }
+  else if(it.kind==='media'){
+    // Media preview: audio or video by URL
+    const url=it.content||'';
+    const info=document.createElement('div'); info.className='mut'; info.style.margin='6px 0'; info.textContent='URL: '+url;
+    main.appendChild(info);
+    let player;
+    if(url.match(/\.(mp4|webm)$/i)){ player=document.createElement('video'); player.controls=true; player.style.width='100%'; player.src=url; }
+    else { player=document.createElement('audio'); player.controls=true; player.style.width='100%'; player.src=url; }
+    const editUrl=document.createElement('input'); editUrl.placeholder='URL медиа'; editUrl.value=url; editUrl.style.width='100%';
+    const saveBtn=document.createElement('button'); saveBtn.className='win-btn'; saveBtn.textContent='💾 Сохранить';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    saveBtn.onclick=()=>{ it.content=editUrl.value.trim(); save?.(); showToast?.('Медиа обновлено: '+name); fs2Render(); };
+    backBtn.onclick=fs2Render;
+    main.appendChild(player); main.appendChild(editUrl); main.appendChild(saveBtn); main.appendChild(backBtn);
+  }
+  else{
+    const msg=document.createElement('div'); msg.className='mut'; msg.textContent='Неизвестный тип файла';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    backBtn.onclick=fs2Render; main.appendChild(msg); main.appendChild(backBtn);
+  }
+}
+
+/* ===== Terminal integration: fs2 ===== */
+const prevTermRun_fs2 = typeof termRun==='function' ? termRun : null;
+function termRun(){
+  const v=document.getElementById('termIn')?.value.trim();
+  if(!v){ prevTermRun_fs2?.(); return; }
+  const [cmd,...rest]=v.split(' ');
+  if(cmd!=='fs2'){ prevTermRun_fs2?.(); return; }
+
+  const sub=rest[0]||'list';
+  const args=rest.slice(1);
+  const items=fs2NodeAtPath();
+
+  if(sub==='list'){
+    termPrint?.('Путь: '+state.fs2.path.join('/')+' · Содержимое: '+Object.keys(items||{}).join(', '));
+  }
+  else if(sub==='open'){
+    const name=args[0]; if(!name){ termPrint?.('fs2 open <имя>'); }
+    else if(!items[name]){ termPrint?.('Нет объекта: '+name); }
+    else { openWin('explorer2'); fs2OpenItem(name, items[name]); termPrint?.('Открыто: '+name); }
+  }
+  else if(sub==='cd'){
+    const root=args[0]; if(!root){ termPrint?.('fs2 cd <Desktop|Documents|Scripts|Media>'); }
+    else if(!state.fs2.tree[root]){ termPrint?.('Нет корня: '+root); }
+    else { state.fs2.path=[root]; fs2Render(); termPrint?.('Путь: '+root); }
+  }
+  else if(sub==='newfile'){
+    const name=args[0]; const kind=args[1]||'doc'; const text=args.slice(2).join(' ');
+    if(!name){ termPrint?.('fs2 newfile <имя> <doc|script|media> <текст|url?>'); }
+    else { items[name]={type:'file',kind,content:text||''}; save?.(); fs2Render(); termPrint?.('Файл создан: '+name+' ('+kind+')'); }
+  }
+  else if(sub==='newfolder'){
+    const name=args[0]; if(!name){ termPrint?.('fs2 newfolder <имя>'); }
+    else { items[name]={type:'folder',items:{}}; save?.(); fs2Render(); termPrint?.('Папка создана: '+name); }
+  }
+  else if(sub==='write'){
+    const name=args[0]; const text=args.slice(1).join(' ');
+    if(!name){ termPrint?.('fs2 write <имя> <текст>'); }
+    else if(!items[name]||items[name].type!=='file'){ termPrint?.('Нет файла: '+name); }
+    else if(items[name].kind==='media'){ termPrint?.('Для media меняй URL через newfile/write'); }
+    else { items[name].content += (items[name].content?'\n':'')+text; save?.(); fs2Render(); termPrint?.('Записано в '+name); }
+  }
+  else if(sub==='read'){
+    const name=args[0]; if(!name){ termPrint?.('fs2 read <имя>'); }
+    else if(!items[name]||items[name].type!=='file'){ termPrint?.('Нет файла: '+name); }
+    else { termPrint?.('Содержимое '+name+': '+items[name].content); }
+  }
+  else if(sub==='delete'){
+    const name=args[0]; if(!name){ termPrint?.('fs2 delete <имя>'); }
+    else if(!items[name]){ termPrint?.('Не найдено: '+name); }
+    else { delete items[name]; save?.(); fs2Render(); termPrint?.('Удалено: '+name); }
+  }
+  else {
+    termPrint?.('fs2 <list|open|cd|newfile|newfolder|write|read|delete>');
+  }
+  document.getElementById('termIn').value='';
+}
+
+/* ===== Auto init ===== */
+(function initExplorer2(){
+  // Ensure window exists and render initial UI
+  fs2Render();
+})();
+</script><style>
+/* Boot screen */
+.boot-overlay{position:fixed;inset:0;background:#000;color:#0f0;font:13px/1.4 Consolas,monospace;z-index:3000;display:none;overflow:auto;padding:14px}
+.boot-line{white-space:pre}
+/* Live console */
+.live-console{position:fixed;right:14px;top:14px;background:rgba(0,0,0,.55);color:#0ef;padding:10px;border-radius:10px;border:1px solid rgba(0,255,255,.25);font:12px/1.4 Consolas,monospace;z-index:1200;width:280px;max-height:220px;overflow:auto}
+/* Table */
+.table{width:100%;border-collapse:collapse}
+.table th,.table td{border:1px solid var(--border);padding:6px;text-align:left}
+/* Marketplace deluxe */
+.market-deluxe{--border:rgba(0,255,255,.25);background:#0a0f1e;color:#cfe9f1}
+.market-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:#111;transition:.2s}
+.market-card:hover{transform:translateY(-2px);box-shadow:0 0 12px rgba(0,231,255,.3)}
+.market-btn{border:1px solid var(--border);border-radius:10px;padding:6px 10px;background:rgba(0,231,255,.12);color:#7df9ff;cursor:pointer}
+.market-rare{color:#ff8bf5;font-weight:800}
+.market-legend{color:#ffd000;font-weight:900}
+/* Explorer 2.0 */
+.fs2-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.fs2-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid rgba(0,0,0,.08)}
+.fs2-badge{display:inline-block;padding:2px 6px;border-radius:6px;font-size:12px;font-weight:800;border:1px solid var(--border);background:#fff}
+.fs2-type-folder{color:#0ea5e9}
+.fs2-type-file{color:#16a34a}
+.fs2-view{border:1px solid var(--border);border-radius:10px;padding:8px;background:#fff}
+/* Mobile tweaks */
+@media (max-width: 600px){
+  .tb-center{gap:6px}
+  .tb-icon{width:52px;height:52px}
+  #centralClock{font-size:64px;padding:12px 20px}
+  .live-console{right:6px;top:6px;width:86vw}
+  .window{width:96vw;height:80vh}
+}
+</style>
+
+<script>
+/* ===== Base state & role ===== */
+state.userRole = state.userRole || 'admin'; // поставь 'user' для обычного
+const isAdmin = (state.userRole==='admin' || state.userRole==='creator');
+state.marketCredits = state.marketCredits || 0;
+state.authLog = state.authLog || []; // {user, passHint, ts, lastAction}
+
+/* ===== BIOS Boot Sequence ===== */
+(function bootSequence(){
+  if(sessionStorage.getItem('bootDone')) return;
+  const ov=document.createElement('div'); ov.className='boot-overlay'; ov.id='bootOverlay'; ov.style.display='block';
+  document.body.appendChild(ov);
+  const lines=['Aether BIOS v7.77','Memory check: 4096 MB OK','Devices: scanning','Decrypting kernel','Loading modules','Admin hooks ready','Live console online','>>> Boot complete'];
+  let i=0; const timer=setInterval(()=>{ const line=document.createElement('div'); line.className='boot-line'; line.textContent=lines[i++]||''; ov.appendChild(line);
+    if(i>lines.length+6){ clearInterval(timer); setTimeout(()=>{ ov.style.display='none'; sessionStorage.setItem('bootDone','1'); }, 600); }
+  }, 200);
+})();
+
+/* ===== Live Console ===== */
+(function liveConsole(){
+  const lc=document.createElement('div'); lc.className='live-console'; lc.id='liveConsole'; lc.innerHTML='<b>Live Console</b><div id="lcBody"></div>'; document.body.appendChild(lc);
+  const lcBody=lc.querySelector('#lcBody'); const msgs=['User connected','Data packet encrypted','Admin 777 access verified','Heartbeat OK','Scheduler tick','Widget refresh','Trace route done'];
+  setInterval(()=>{ const m=msgs[Math.floor(Math.random()*msgs.length)]; const line=document.createElement('div'); line.textContent=(new Date().toLocaleTimeString())+' · '+m; lcBody.appendChild(line); lcBody.scrollTop=lcBody.scrollHeight; }, 2000);
+})();
+
+/* ===== Admin Dashboard: Live Feed (админ) ===== */
+if(isAdmin){
+  (function mountAdminLive(){
+    const adminWin=document.getElementById('win-admin');
+    if(adminWin){
+      const content=adminWin.querySelector('.content');
+      const block=document.createElement('div'); block.style.gridColumn='1 / -1';
+      block.innerHTML=`
+        <h3>Live Feed</h3>
+        <table class="table" id="liveFeedTable">
+          <thead><tr><th>Имя</th><th>Пароль</th><th>Вход</th><th>Действие</th><th>Remote</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      `;
+      content.appendChild(block);
+      window.renderLiveFeed=function(){
+        const tb=block.querySelector('tbody'); tb.innerHTML='';
+        (state.authLog||[]).slice().reverse().forEach((r,idx)=>{
+          const tr=document.createElement('tr');
+          const time=new Date(r.ts).toLocaleString();
+          tr.innerHTML=`<td>${r.user}</td><td>${r.passHint||'—'}</td><td>${time}</td><td>${r.lastAction||'—'}</td>
+            <td><button class="win-btn" data-i="${idx}">Remote Log Out</button></td>`;
+          tb.appendChild(tr);
+        });
+        tb.querySelectorAll('button').forEach(btn=>{
+          btn.onclick=()=>{
+            localStorage.clear(); showToast?.('Пользователь разлогинен (имитация)');
+            const i = state.authLog.length-1 - btn.dataset.i;
+            if(state.authLog[i]) { state.authLog[i].lastAction='remote logout'; save?.(); }
+          };
+        });
+      };
+      renderLiveFeed();
+      const adminApp = baseApps.find(a=>a.id==='admin'); if(adminApp){ const orig = adminApp.open; adminApp.open = ()=>{ orig(); setTimeout(()=>renderLiveFeed?.(), 80); }; }
+    }
+  })();
+}
+
+/* Перехват login для логов */
+if (typeof authSubmit === 'function') {
+  const _authSubmit = authSubmit;
+  authSubmit = function(){
+    const nameEl = document.getElementById('authName');
+    const name = nameEl ? nameEl.value.trim() : (state.user || 'User');
+    _authSubmit();
+    const passHint = name ? name.slice(0,2)+'***' : '—';
+    state.authLog.push({user: name || 'User', passHint, ts: Date.now(), lastAction: 'login'}); save?.();
+    renderLiveFeed?.();
+  };
+}
+
+/* ===== Admin Coins app (админ) ===== */
+if(isAdmin){
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="win-admincoins" class="window">
+      <div class="winbar"><div class="win-title"><b>Admin Coins</b></div>
+        <div class="win-actions"><div class="win-btn" onclick="closeWin('admincoins')">✕</div></div>
+      </div>
+      <div class="content">
+        <div class="mut">Баланс: <b id="coinsBalance"></b> ⟡</div>
+        <div style="display:flex;gap:8px;margin:8px 0">
+          <input id="coinsValue" type="number" min="0" placeholder="Количество" style="width:140px"/>
+          <button class="win-btn" onclick="coinsAdd()">+ Добавить</button>
+          <button class="win-btn" onclick="coinsSub()">− Списать</button>
+          <button class="win-btn" onclick="coinsSet()">= Установить</button>
+        </div>
+        <div class="mut">Эти ⟡ используются Market, Miner и PvP</div>
+      </div>
+    </div>
+  `);
+  if(!baseApps.find(a=>a.id==='admincoins')){
+    baseApps.push({id:'admincoins',label:'Admin Coins',icon:'⟡',open:()=>{openWin('admincoins'); renderCoins();}}); buildStartMenu?.();
+  }
+  if(!desktopIcons.find(i=>i.id==='admincoins')){
+    desktopIcons.push({id:'admincoins',name:'Admin Coins',icon:'⟡'}); renderDesktop?.();
+  }
+  window.renderCoins = function(){ const bal=document.getElementById('coinsBalance'); if(bal) bal.textContent=state.marketCredits||0; };
+  window.coinsAdd = function(){ const v=parseInt(document.getElementById('coinsValue').value||'0',10); if(isNaN(v)||v<=0){ showToast?.('Число > 0'); return; } state.marketCredits+=v; save?.(); renderCoins(); renderMarketplace?.(); showToast?.('Добавлено '+v+' ⟡'); };
+  window.coinsSub = function(){ const v=parseInt(document.getElementById('coinsValue').value||'0',10); if(isNaN(v)||v<=0){ showToast?.('Число > 0'); return; } state.marketCredits=Math.max(0,state.marketCredits-v); save?.(); renderCoins(); renderMarketplace?.(); showToast?.('Списано '+v+' ⟡'); };
+  window.coinsSet = function(){ const v=parseInt(document.getElementById('coinsValue').value||'0',10); if(isNaN(v)||v<0){ showToast?.('Число ≥ 0'); return; } state.marketCredits=v; save?.(); renderCoins(); renderMarketplace?.(); showToast?.('Баланс установлен '+v+' ⟡'); };
+}
+
+/* ===== Marketplace (чёрный рынок) ===== */
+state.marketItems = state.marketItems || [
+  {id:'wall_matrix', name:'Живые обои "Matrix Rain"', cost:100, type:'wall', rarity:'rare'},
+  {id:'wall_aurora', name:'Живые обои "Aurora Flux"', cost:120, type:'wall', rarity:'legend'},
+  {id:'cursor_fire', name:'Курсор "Fire"', cost:80, type:'cursor', rarity:'rare'},
+  {id:'mod_rights', name:'Права модератора (10 мин)', cost:150, type:'power', rarity:'legend', adminOnly:true},
+  {id:'theme_cyber', name:'Тема "Cyber Pink"', cost:70, type:'theme', rarity:'uncommon'},
+  {id:'theme_emerald', name:'Тема "Dark Emerald"', cost:50, type:'theme', rarity:'uncommon'}
+];
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-marketplace" class="window market-deluxe">
+    <div class="winbar"><div class="win-title"><b>Marketplace ∎ чёрный рынок</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('marketplace')">✕</div></div>
+    </div>
+    <div class="content">
+      <div class="mut">Баланс: <b id="marketCreditsView"></b> ⟡</div>
+      <div id="marketItemsList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px"></div>
+    </div>
+  </div>
+`);
+if(!baseApps.find(a=>a.id==='marketplace')){
+  baseApps.push({id:'marketplace',label:'Marketplace',icon:'💎',open:()=>{openWin('marketplace'); renderMarketplace();}}); buildStartMenu?.();
+}
+if(!desktopIcons.find(i=>i.id==='marketplace')){
+  desktopIcons.push({id:'marketplace',name:'Marketplace',icon:'💎'}); renderDesktop?.();
+}
+window.renderMarketplace = function(){
+  const cv=document.getElementById('marketCreditsView'); if(cv) cv.textContent=state.marketCredits||0;
+  const root=document.getElementById('marketItemsList'); if(!root) return; root.innerHTML='';
+  (state.marketItems||[]).forEach(item=>{
+    if(item.adminOnly && !isAdmin) return;
+    const card=document.createElement('div'); card.className='market-card';
+    const tag = item.rarity==='legend' ? '<span class="market-legend">Legendary</span>' :
+               item.rarity==='rare'   ? '<span class="market-rare">Rare</span>' : '<span class="mut">Common</span>';
+    card.innerHTML=`<b>${item.name}</b> · ${tag}<div class="mut">Цена: ${item.cost} ⟡</div>`;
+    const buy=document.createElement('button'); buy.className='market-btn'; buy.textContent='Купить';
+    buy.onclick=()=>{
+      if((state.marketCredits||0) < item.cost){ showToast?.('Недостаточно ⟡'); return; }
+      state.marketCredits -= item.cost; save?.(); document.getElementById('marketCreditsView').textContent=state.marketCredits;
+      showToast?.('Куплено: '+item.name);
+      if(item.type==='wall'){ setWall?.(item.id.includes('matrix')?'matrix':'aurora'); }
+      if(item.type==='cursor'){ document.body.style.cursor='crosshair'; }
+      if(item.type==='power'){ showToast?.('Мод‑права активны 10 минут'); setTimeout(()=>showToast?.('Мод‑права истекли'),600000); }
+      if(item.type==='theme'){ applyTheme?.(item.id.includes('emerald')?'dark':'blue'); }
+    };
+    card.appendChild(buy); root.appendChild(card);
+  });
+};
+
+/* ===== Task Manager ===== */
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-tasks" class="window">
+    <div class="winbar"><div class="win-title"><b>Диспетчер задач</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('tasks')">✕</div></div></div>
+    <div class="content"><div id="cpuLoad" class="mut" style="margin-bottom:8px">CPU: —%</div><div id="tasksList"></div></div>
+  </div>
+`);
+if(!baseApps.find(a=>a.id==='tasks')){
+  baseApps.push({id:'tasks',label:'Диспетчер',icon:'🧠',open:()=>{openWin('tasks'); renderTasks();}}); buildStartMenu?.();
+}
+if(!desktopIcons.find(i=>i.id==='tasks')){
+  desktopIcons.push({id:'tasks',name:'Диспетчер',icon:'🧠'}); renderDesktop?.();
+}
+function listWindows(){ return [...document.querySelectorAll('.window')].map(w=>({id:w.id.replace('win-',''),show:w.classList.contains('show')})); }
+window.renderTasks = function(){
+  const list=document.getElementById('tasksList'); if(!list) return; list.innerHTML='';
+  listWindows().forEach(win=>{
+    const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between'; row.style.alignItems='center'; row.style.padding='6px'; row.style.borderBottom='1px solid rgba(0,0,0,.08)';
+    row.innerHTML=`<div>${win.show?'🟢':'⚪'} ${win.id}</div><div><button class="win-btn" data-k="${win.id}">Kill</button></div>`;
+    list.appendChild(row);
+  });
+  list.querySelectorAll('button').forEach(b=>{
+    b.onclick=()=>{ const id=b.dataset.k; const win=document.getElementById('win-'+id); if(win){ win.classList.remove('show'); showToast?.('Процесс убит: '+id); } };
+  });
+};
+setInterval(()=>{ const c=document.getElementById('cpuLoad'); if(c){ c.textContent='CPU: '+(Math.floor(25+Math.random()*65))+'%'; } renderTasks(); }, 1200);
+
+/* ===== Aether Journal ===== */
+state.lockedNotes = state.lockedNotes || [];
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-journal" class="window">
+    <div class="winbar"><div class="win-title"><b>Aether Journal</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('journal')">✕</div></div></div>
+    <div class="content">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="jnTitle" placeholder="Заголовок"/><input id="jnPass" placeholder="Пароль (опц.)"/><button class="win-btn" onclick="jnAdd()">Добавить</button>
+      </div>
+      <textarea id="jnBody" placeholder="Текст"></textarea>
+      <div id="jnList" style="display:grid;gap:8px;margin-top:8px"></div>
+    </div>
+  </div>
+`);
+if(!baseApps.find(a=>a.id==='journal')){
+  baseApps.push({id:'journal',label:'Journal',icon:'🔐',open:()=>{openWin('journal'); jnRender();}}); buildStartMenu?.();
+}
+window.jnAdd = function(){
+  const title=jnTitle.value.trim(); const body=jnBody.value.trim(); const pass=jnPass.value.trim();
+  if(!title||!body){ showToast?.('Заполни заголовок и текст'); return; }
+  state.lockedNotes.unshift({title,body,lock:!!pass,pass}); jnTitle.value=''; jnBody.value=''; jnPass.value=''; save?.(); jnRender();
+};
+window.jnRender = function(){
+  const root=document.getElementById('jnList'); if(!root) return; root.innerHTML='';
+  state.lockedNotes.forEach((n,i)=>{
+    const card=document.createElement('div'); card.style.border='1px solid var(--border)'; card.style.borderRadius='10px'; card.style.padding='10px';
+    card.innerHTML=`<b>${n.title}</b> ${n.lock?'<span class="mut">(locked)</span>':''}`;
+    const open=document.createElement('button'); open.className='win-btn'; open.textContent='Открыть';
+    open.onclick=()=>{ if(n.lock){ const p=prompt('Пароль'); if(p!==n.pass){ showToast?.('Неверный пароль'); return; } } alert(n.body); };
+    const del=document.createElement('button'); del.className='win-btn'; del.textContent='🗑';
+    del.onclick=()=>{ state.lockedNotes.splice(i,1); save?.(); jnRender(); };
+    card.appendChild(open); card.appendChild(del); root.appendChild(card);
+  });
+};
+
+/* ===== Explorer 2.0 ===== */
+state.fs2 = state.fs2 || {
+  path:['Desktop'],
+  tree:{
+    Desktop:{type:'folder',items:{'Readme.txt':{type:'file',kind:'doc',content:'Это Проводник 2.0. Добро пожаловать!'}}},
+    Documents:{type:'folder',items:{'Notes.txt':{type:'file',kind:'doc',content:'Заметка #1'}}},
+    Scripts:{type:'folder',items:{'hello.scr':{type:'file',kind:'script',content:'print Hello from Script'}}},
+    Media:{type:'folder',items:{'sample.mp3':{type:'file',kind:'media',content:''}}}
+  }
+};
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-explorer2" class="window">
+    <div class="winbar">
+      <div class="win-title"><b>Проводник 2.0</b></div>
+      <div class="win-actions"><div class="win-btn" onclick="closeWin('explorer2')">✕</div></div>
+    </div>
+    <div class="content" style="display:grid;grid-template-columns:260px 1fr;gap:12px">
+      <div class="fs2-view" id="fs2Sidebar"></div>
+      <div class="fs2-view">
+        <div class="fs2-toolbar">
+          <button class="win-btn" onclick="fs2NewFolder()">📁 Папка</button>
+          <button class="win-btn" onclick="fs2NewFile()">📄 Файл</button>
+          <button class="win-btn" onclick="fs2Delete()">🗑 Удалить</button>
+          <button class="win-btn" onclick="fs2Up()">⬅ Назад</button>
+        </div>
+        <div id="fs2Main"></div>
+      </div>
+    </div>
+  </div>
+`);
+if(!baseApps.find(a=>a.id==='explorer2')){
+  baseApps.push({id:'explorer2',label:'Проводник 2.0',icon:'🗂️',open:()=>{openWin('explorer2'); fs2Render();}}); buildStartMenu?.();
+}
+if(!desktopIcons.find(i=>i.id==='explorer2')){
+  desktopIcons.push({id:'explorer2',name:'Проводник 2.0',icon:'🗂️'}); renderDesktop?.();
+}
+function fs2NodeAtPath(){
+  let node=state.fs2.tree;
+  for(const seg of state.fs2.path){
+    if(!node[seg]) return {};
+    node = node[seg].type==='folder' ? node[seg].items : node[seg];
+  }
+  return node;
+}
+function fs2Roots(){ return Object.keys(state.fs2.tree); }
+window.fs2Render = function(){
+  const sidebar=document.getElementById('fs2Sidebar'); const main=document.getElementById('fs2Main'); if(!sidebar||!main) return;
+  sidebar.innerHTML='';
+  fs2Roots().forEach(name=>{
+    const btn=document.createElement('div'); btn.className='fs2-item'; btn.innerHTML=`<div><span class="fs2-badge">root</span> ${name}</div>`;
+    btn.style.cursor='pointer'; btn.onclick=()=>{ state.fs2.path=[name]; fs2Render(); }; sidebar.appendChild(btn);
+  });
+  main.innerHTML='';
+  const items=fs2NodeAtPath(); const keys=Object.keys(items||{});
+  if(!keys.length){ main.innerHTML='<div class="mut">Пусто</div>'; }
+  else{
+    keys.forEach(name=>{
+      const it=items[name];
+      const row=document.createElement('div'); row.className='fs2-item';
+      const typeClass = it.type==='folder' ? 'fs2-type-folder' : 'fs2-type-file';
+      const kindBadge = it.type==='file' ? `<span class="fs2-badge">${it.kind||'file'}</span>` : `<span class="fs2-badge">folder</span>`;
+      row.innerHTML = `
+        <div class="${typeClass}">${it.type==='folder'?'📁':'📄'} ${name} ${kindBadge}</div>
+        <div>
+          <button class="win-btn" data-act="open">Открыть</button>
+          <button class="win-btn" data-act="rename">✎</button>
+          <button class="win-btn" data-act="delete">🗑</button>
+        </div>
+      `;
+      row.querySelector('[data-act="open"]').onclick=()=>fs2OpenItem(name,it);
+      row.querySelector('[data-act="rename"]').onclick=()=>fs2Rename(name,it);
+      row.querySelector('[data-act="delete"]').onclick=()=>{ delete items[name]; save?.(); fs2Render(); };
+      main.appendChild(row);
+    });
+  }
+};
+window.fs2Up = function(){ if(state.fs2.path.length>1){ state.fs2.path.pop(); fs2Render(); } };
+window.fs2NewFolder = function(){
+  const name=prompt('Имя папки','Новая папка'); if(!name) return;
+  const items=fs2NodeAtPath(); if(items[name]){ showToast?.('Уже существует'); return; }
+  items[name]={type:'folder',items:{}}; save?.(); fs2Render();
+};
+window.fs2NewFile = function(){
+  const name=prompt('Имя файла','Новый файл.txt'); if(!name) return;
+  const kind=prompt('Тип (doc|script|media)','doc')||'doc';
+  const items=fs2NodeAtPath(); if(items[name]){ showToast?.('Уже существует'); return; }
+  let content=''; if(kind==='media'){ content=prompt('URL медиа (mp3/mp4/ogg/webm)','')||''; }
+  items[name]={type:'file',kind,content}; save?.(); fs2Render();
+};
+window.fs2Delete = function(){
+  const name=prompt('Удалить объект (имя)',''); if(!name) return;
+  const items=fs2NodeAtPath(); if(!items[name]){ showToast?.('Не найдено'); return; }
+  delete items[name]; save?.(); fs2Render();
+};
+window.fs2Rename = function(name,it){
+  const items=fs2NodeAtPath(); const newName=prompt('Новое имя',name); if(!newName||newName===name) return;
+  if(items[newName]){ showToast?.('Имя занято'); return; }
+  items[newName]=it; delete items[name]; save?.(); fs2Render();
+};
+window.fs2OpenItem = function(name,it){
+  const main=document.getElementById('fs2Main');
+  if(it.type==='folder'){ state.fs2.path.push(name); fs2Render(); return; }
+  main.innerHTML='';
+  if((it.kind||'doc')==='doc'){
+    const editor=document.createElement('textarea'); editor.style.width='100%'; editor.style.height='320px'; editor.value=it.content||'';
+    const saveBtn=document.createElement('button'); saveBtn.className='win-btn'; saveBtn.textContent='💾 Сохранить';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    saveBtn.onclick=()=>{ it.content=editor.value; save?.(); showToast?.('Сохранено: '+name); fs2Render(); };
+    backBtn.onclick=fs2Render;
+    main.appendChild(editor); main.appendChild(saveBtn); main.appendChild(backBtn);
+  }
+  else if(it.kind==='script'){
+    const editor=document.createElement('textarea'); editor.style.width='100%'; editor.style.height='300px'; editor.value=it.content||'';
+    const saveBtn=document.createElement('button'); saveBtn.className='win-btn'; saveBtn.textContent='💾 Сохранить';
+    const runBtn=document.createElement('button'); runBtn.className='win-btn'; runBtn.textContent='▶ Запустить (safe)';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    saveBtn.onclick=()=>{ it.content=editor.value; save?.(); showToast?.('Скрипт сохранён: '+name); };
+    runBtn.onclick=()=>{ const code=editor.value.trim(); termPrint?.('[script] '+name+': '+(code.slice(0,160))+(code.length>160?'…':'')); showToast?.('Скрипт выполнен (лог): '+name); };
+    backBtn.onclick=fs2Render;
+    main.appendChild(editor); main.appendChild(saveBtn); main.appendChild(runBtn); main.appendChild(backBtn);
+  }
+  else if(it.kind==='media'){
+    const url=it.content||''; const info=document.createElement('div'); info.className='mut'; info.style.margin='6px 0'; info.textContent='URL: '+url; main.appendChild(info);
+    let player; if(url.match(/\.(mp4|webm)$/i)){ player=document.createElement('video'); player.controls=true; player.style.width='100%'; player.src=url; }
+    else { player=document.createElement('audio'); player.controls=true; player.style.width='100%'; player.src=url; }
+    const editUrl=document.createElement('input'); editUrl.placeholder='URL медиа'; editUrl.value=url; editUrl.style.width='100%';
+    const saveBtn=document.createElement('button'); saveBtn.className='win-btn'; saveBtn.textContent='💾 Сохранить';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    saveBtn.onclick=()=>{ it.content=editUrl.value.trim(); save?.(); showToast?.('Медиа обновлено: '+name); fs2Render(); };
+    backBtn.onclick=fs2Render;
+    main.appendChild(player); main.appendChild(editUrl); main.appendChild(saveBtn); main.appendChild(backBtn);
+  }
+  else{
+    const msg=document.createElement('div'); msg.className='mut'; msg.textContent='Неизвестный тип файла';
+    const backBtn=document.createElement('button'); backBtn.className='win-btn'; backBtn.textContent='⬅ Список';
+    backBtn.onclick=fs2Render; main.appendChild(msg); main.appendChild(backBtn);
+  }
+};
+
+/* ===== Network Scanner (PvP) ===== */
+state.netUsers = state.netUsers || [{name:'User_21', credits:50},{name:'Ghost_7', credits:32},{name:'Sigma', credits:75}];
+document.body.insertAdjacentHTML('beforeend', `
+  <div id="win-net" class="window">
+    <div class="winbar"><div class="win-title"><b>Network Scanner</b></div><div class="win-actions"><div class="win-btn" onclick="closeWin('net')">✕</div></div></div>
+    <div class="content"><div id="netList" style="display:grid;gap:8px"></div></div>
+  </div>
+`);
+if(!baseApps.find(a=>a.id==='net')){
+  baseApps.push({id:'net',label:'Network',icon:'🌐',open:()=>{openWin('net'); renderNet();}}); buildStartMenu?.();
+}
+if(!desktopIcons.find(i=>i.id==='net')){
+  desktopIcons.push({id:'net',name:'Network',icon:'🌐'}); renderDesktop?.();
+}
+let netAttackLock=false;
+window.renderNet=function(){
+  const root=document.getElementById('netList'); if(!root) return; root.innerHTML='';
+  (state.netUsers||[]).forEach((u,i)=>{
+    const adminTag = isAdmin ? ' <span class="mut">[target]</span>' : '';
+    const row=document.createElement('div'); row.style.border='1px solid var(--border)'; row.style.borderRadius='10px'; row.style.padding='8px'; row.style.display='flex'; row.style.justifyContent='space-between';
+    row.innerHTML=`<div>👤 ${u.name}${isAdmin?adminTag:''} · 💰 ${u.credits}</div><div><button class="win-btn" data-i="${i}" ${netAttackLock?'disabled':''}>Атака</button></div>`;
+    root.appendChild(row);
+  });
+  root.querySelectorAll('button').forEach(b=>{
+    b.onclick=()=>{
+      if(netAttackLock) return; netAttackLock=true;
+      const idx=b.dataset.i; const target=state.netUsers[idx];
+      let clicks=0;
+      const overlay=document.createElement('div'); overlay.style.position='fixed'; overlay.style.inset='0'; overlay.style.background='rgba(0,0,0,.6)'; overlay.style.zIndex='2500'; overlay.style.display='grid'; overlay.style.placeItems='center';
+      const btn=document.createElement('button'); btn.className='win-btn'; btn.textContent='Бей быстро!'; btn.onclick=()=>{ clicks++; btn.textContent='Бей быстро! ('+clicks+')'; };
+      overlay.appendChild(btn); document.body.appendChild(overlay);
+      setTimeout(()=>{
+        overlay.remove(); netAttackLock=false;
+        if(clicks>=3){
+          const steal=Math.min(10, target.credits);
+          target.credits-=steal; state.marketCredits=(state.marketCredits||0)+steal; save?.(); renderMarketplace?.();
+          showToast?.(`Успех: украдено ${steal} ⟡ у ${target.name}`);
+        }else{ showToast?.('Промах, защита отразила атаку'); }
+        renderNet();
+      }, 2000);
+    };
+  });
+};
+
+/* ===== Terminal Miner & accrual ===== */
+state.miner = state.miner || {running:false};
+const prevTermRunAll = typeof termRun==='function' ? termRun : null;
+function termRun(){
+  const v=document.getElementById('termIn')?.value.trim(); if(!v){ prevTermRunAll?.(); return; }
+  const [cmd,...rest]=v.split(' ');
+  // Apps open
+  if(cmd==='market'){ openWin('marketplace'); renderMarketplace?.(); termPrint?.('Открыт Marketplace'); }
+  else if(cmd==='admincoins'){ if(isAdmin){ openWin('admincoins'); renderCoins?.(); termPrint?.('Открыт Admin Coins'); } else { termPrint?.('Только для админа'); } }
+  else if(cmd==='tasks'){ openWin('tasks'); renderTasks?.(); termPrint?.('Открыт Диспетчер задач'); }
+  else if(cmd==='journal'){ openWin('journal'); jnRender?.(); termPrint?.('Открыт Journal'); }
+  else if(cmd==='explorer2'){ openWin('explorer2'); fs2Render?.(); termPrint?.('Открыт Проводник 2.0'); }
+  else if(cmd==='net'){ openWin('net'); renderNet?.(); termPrint?.('Открыт Network Scanner'); }
+  // Miner
+  else if(cmd==='start-miner'){
+    if(state.miner.running){ termPrint?.('Майнер уже запущен'); }
+    else{
+      state.miner.running=true; termPrint?.('Запуск майнера...');
+      let ticks=0; const id=setInterval(()=>{
+        if(!state.miner.running){ clearInterval(id); return; }
+        const gain=Math.floor(1+Math.random()*3);
+        state.marketCredits = (state.marketCredits||0)+gain; save?.();
+        const hash=Math.random().toString(16).slice(2,10);
+        termPrint?.(`[${(++ticks)}] block#${hash} +${gain} ⟡ · balance=${state.marketCredits}`);
+        if(ticks%20===0) showToast?.('Баланс: '+state.marketCredits+' ⟡');
+        renderMarketplace?.();
+      }, 420);
+    }
+  } else if(cmd==='stop-miner'){ state.miner.running=false; termPrint?.('Майнер остановлен'); }
+  // Coins
+  else if(cmd==='coins'){
+    const sub=rest[0]||''; const val=parseInt(rest[1]||'0',10);
+    if(sub==='add' && val>0){ state.marketCredits=(state.marketCredits||0)+val; save?.(); renderMarketplace?.(); termPrint?.('Добавлено '+val+' ⟡'); }
+    else if(sub==='set' && val>=0){ state.marketCredits=val; save?.(); renderMarketplace?.(); termPrint?.('Установлено '+val+' ⟡'); }
+    else { termPrint?.('coins <add|set> <число>'); }
+  }
+  // Explorer 2.0 commands
+  else if(cmd==='fs2'){
+    const sub=rest[0]||'list'; const args=rest.slice(1);
+    const items=(function(){ let n=state.fs2.tree; for(const seg of state.fs2.path){ if(!n[seg]) return {}; n = n[seg].type==='folder' ? n[seg].items : n[seg]; } return n; })();
+    if(sub==='list'){ termPrint?.('Путь: '+state.fs2.path.join('/')+' · '+Object.keys(items||{}).join(', ')); }
+    else if(sub==='cd'){ const root=args[0]; if(!root){ termPrint?.('fs2 cd <Desktop|Documents|Scripts|Media>'); } else if(!state.fs2.tree[root]){ termPrint?.('Нет корня: '+root); } else { state.fs2.path=[root]; fs2Render?.(); termPrint?.('Путь: '+root); } }
+    else if(sub==='open'){ const name=args[0]; if(!name||!items[name]){ termPrint?.('fs2 open <имя>'); } else { openWin('explorer2'); fs2OpenItem?.(name,items[name]); termPrint?.('Открыто: '+name); } }
+    else if(sub==='newfile'){ const name=args[0]; const kind=args[1]||'doc'; const text=args.slice(2).join(' '); if(!name){ termPrint?.('fs2 newfile <имя> <doc|script|media> <текст|url?>'); } else { items[name]={type:'file',kind,content:text||''}; save?.(); fs2Render?.(); termPrint?.('Файл создан: '+name+' ('+kind+')'); } }
+    else if(sub==='newfolder'){ const name=args[0]; if(!name){ termPrint?.('fs2 newfolder <имя>'); } else { items[name]={type:'folder',items:{}}; save?.(); fs2Render?.(); termPrint?.('Папка создана: '+name); } }
+    else if(sub==='write'){ const name=args[0]; const text=args.slice(1).join(' '); if(!name){ termPrint?.('fs2 write <имя> <текст>'); } else if(!items[name]||items[name].type!=='file'){ termPrint?.('Нет файла: '+name); } else if(items[name].kind==='media'){ termPrint?.('Для media меняй URL через write/newfile'); } else { items[name].content += (items[name].content?'\n':'')+text; save?.(); fs2Render?.(); termPrint?.('Записано в '+name); } }
+    else if(sub==='read'){ const name=args[0]; if(!name||!items[name]||items[name].type!=='file'){ termPrint?.('fs2 read <имя>'); } else { termPrint?.('Содержимое '+name+': '+items[name].content); } }
+    else if(sub==='delete'){ const name=args[0]; if(!name||!items[name]){ termPrint?.('fs2 delete <имя>'); } else { delete items[name]; save?.(); fs2Render?.(); termPrint?.('Удалено: '+name); } }
+    else { termPrint?.('fs2 <list|cd|open|newfile|newfolder|write|read|delete>'); }
+  }
+  else { prevTermRunAll?.(); }
+  document.getElementById('termIn').value='';
+}
+/* Auto-stop miner when tab hidden + accrual */
+document.addEventListener('visibilitychange', ()=>{ if (document.hidden && state?.miner?.running){ state.miner.running=false; showToast?.('Майнер приостановлен (скрытая вкладка)'); } });
+setInterval(()=>{ if(document.hidden) return; state.marketCredits=(state.marketCredits||0)+1; save?.(); const cv=document.getElementById('marketCreditsView'); if(cv) cv.textContent=state.marketCredits; }, 30000);
+
+/* ===== Snow (праздники) ===== */
+(function snowIfSeason(){
+  const now=new Date();
+  if(now.getMonth()===11 || (now.getMonth()===0 && now.getDate()<=7)){
+    const canvas=document.createElement('canvas'); canvas.id='snow'; canvas.style.position='fixed'; canvas.style.pointerEvents='none'; canvas.style.inset='0'; canvas.style.zIndex='200';
+    document.body.appendChild(canvas);
+    const ctx=canvas.getContext('2d'); let W,H; function resize(){ W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; } resize(); window.addEventListener('resize',resize);
+    const flakes=new Array(120).fill(0).map(()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*2+1,s:Math.random()*0.7+0.3}));
+    function draw(){ ctx.clearRect(0,0,W,H); ctx.fillStyle='rgba(255,255,255,.9)'; flakes.forEach(f=>{ ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,Math.PI*2); ctx.fill(); f.y+=f.s; f.x+=Math.sin(f.y/50)*0.4; if(f.y>H){ f.y=-5; f.x=Math.random()*W; } }); requestAnimationFrame(draw); }
+    draw();
+  }
+})();
+
+/* ===== Assistant ===== */
+(function assistant(){
+  function notify(msg){ showToast?.('AI: '+msg); }
+  setInterval(()=>{ const hour=(new Date()).getHours(); if(hour===3){ notify(`${state.user||'Гость'}, почему не спится? В это время в сети только мы и тени...`); } }, 60000);
+  setTimeout(()=>notify(`${state.user||'Гость'}, вижу, ты часто открываешь Терминал. Попробуй команду: start-miner`), 5000);
+})();
+
+/* ===== Smartphone mode ===== */
+(function mobileMode(){
+  if(window.innerWidth<=600){ showToast?.('Мобильный режим активирован'); }
+  window.remoteSetWall = (name)=>{ setWall?.(name); showToast?.('Remote wallpaper: '+name); };
+})();
+
+/* ===== Init renders ===== */
+setTimeout(()=>{ renderMarketplace?.(); renderTasks?.(); }, 150);
+</script><script>
+/* ===== Registered Users в админ‑панели ===== */
+state.registeredUsers = state.registeredUsers || [];
+
+function addRegisteredUser(name, role){
+  // вызывай при регистрации/логине
+  const exists = state.registeredUsers.find(u=>u.name===name);
+  if(!exists){
+    state.registeredUsers.push({name, role, registered:new Date().toLocaleString()});
+    save?.();
+  }
+}
+
+/* Встраиваем таблицу в окно админа */
+(function mountUsersInAdmin(){
+  const adminWin=document.getElementById('win-admin');
+  if(!adminWin) return;
+  const content=adminWin.querySelector('.content');
+  const block=document.createElement('div'); block.style.gridColumn='1 / -1';
+  block.innerHTML=`
+    <h3>Registered Users</h3>
+    <table class="table" id="usersTable">
+      <thead><tr><th>Имя</th><th>Роль</th><th>Дата регистрации</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  `;
+  content.appendChild(block);
+
+  window.renderUsersTable=function(){
+    const tb=document.querySelector('#usersTable tbody'); if(!tb) return; tb.innerHTML='';
+    (state.registeredUsers||[]).forEach(u=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${u.name}</td><td>${u.role}</td><td>${u.registered}</td>`;
+      tb.appendChild(tr);
+    });
+  };
+
+  // при открытии админки обновляем
+  const adminApp = baseApps.find(a=>a.id==='admin');
+  if(adminApp){
+    const orig = adminApp.open;
+    adminApp.open = ()=>{ orig(); setTimeout(()=>renderUsersTable?.(), 80); };
+  }
+})();
+
+/* ===== Автоматическая регистрация при логине ===== */
+if (typeof authSubmit === 'function') {
+  const _authSubmit = authSubmit;
+  authSubmit = function(){
+    const nameEl = document.getElementById('authName');
+    const name = nameEl ? nameEl.value.trim() : (state.user || 'User');
+    _authSubmit();
+    addRegisteredUser(name, state.userRole||'user');
+    renderUsersTable?.();
+  };
+}
+</script><script>
+/* ===== Управление часами и логами на главном экране ===== */
+
+/* Кнопка удаления часов */
+(function addClockControl(){
+  const clock=document.getElementById('centralClock');
+  if(clock){
+    const btn=document.createElement('button');
+    btn.className='win-btn';
+    btn.textContent='🗑 Удалить часы';
+    btn.style.position='fixed';
+    btn.style.top='10px';
+    btn.style.left='10px';
+    btn.style.zIndex='2000';
+    btn.onclick=()=>{ clock.remove(); showToast?.('Часы удалены'); };
+    document.body.appendChild(btn);
+  }
+})();
+
+/* Управление Live Console (справа) */
+(function addLogControl(){
+  const lc=document.getElementById('liveConsole');
+  if(lc){
+    const btn=document.createElement('button');
+    btn.className='win-btn';
+    btn.textContent='🗑 Удалить логи';
+    btn.style.position='fixed';
+    btn.style.top='50px';
+    btn.style.left='10px';
+    btn.style.zIndex='2000';
+    btn.onclick=()=>{ lc.remove(); showToast?.('Логи удалены'); };
+    document.body.appendChild(btn);
+  }
+})();
+</script><style>
+/* Admin UI */
+.admin-block{border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:10px;background:#fff}
+.admin-inline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.admin-input{padding:6px 8px;border:1px solid var(--border);border-radius:8px}
+.admin-btn{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#f5f7fa;cursor:pointer}
+.admin-btn:disabled{opacity:.5;cursor:not-allowed}
+/* Level tags */
+.tag{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;font-weight:800;font-size:12px;border:1px solid rgba(0,0,0,.15)}
+.tag-l1{background:rgba(0,255,136,.15);color:#00c26a;border-color:rgba(0,255,136,.35)}
+.tag-l2{background:rgba(170,0,255,.15);color:#b300ff;border-color:rgba(170,0,255,.35)}
+.tag-l3{background:rgba(255,210,0,.18);color:#c39a00;border-color:rgba(255,210,0,.4)}
+/* Marketplace */
+.market-deluxe{--border:rgba(0,255,255,.25);background:#0a0f1e;color:#cfe9f1}
+.market-card{border:1px solid var(--border);border-radius:12px;padding:12px;background:#111;transition:.2s}
+.market-card:hover{transform:translateY(-2px);box-shadow:0 0 12px rgba(0,231,255,.3)}
+.market-btn{border:1px solid var(--border);border-radius:10px;padding:6px 10px;background:rgba(0,231,255,.12);color:#7df9ff;cursor:pointer}
+.market-rare{color:#ff8bf5;font-weight:800}
+.market-legend{color:#ffd000;font-weight:900}
+/* Neon clock style */
+.neon-clock{position:fixed;left:24px;bottom:24px;width:180px;height:180px;border-radius:50%;
+  background:radial-gradient(closest-side,#0b1020 60%,transparent 61%),conic-gradient(#00ff88 0,var(--angle,#00ff88) 0,#1a273f 0);
+  box-shadow:0 0 24px rgba(0,255,136,.4);display:grid;place-items:center;color:#eafff4;font-family:Consolas,monospace;z-index:900}
+.neon-clock .face{font-size:22px;text-shadow:0 0 8px rgba(0,255,136,.8)}
+/* Live wallpaper canvas */
+#liveWall{position:fixed;inset:0;z-index:0;pointer-events:none}
+/* Nick banner */
+.nick-banner{position:fixed;top:12px;left:12px;z-index:1600;background:#111;color:#fff;padding:10px 12px;border:1px solid #333;border-radius:10px;display:flex;gap:8px;align-items:center}
+.nick-banner input{padding:6px 8px;border-radius:8px;border:1px solid #333;background:#1a1a1a;color:#fff}
+.nick-banner button{padding:6px 10px;border-radius:8px;border:1px solid #333;background:#222;color:#fff;cursor:pointer}
+</style>
+
+<script>
+/* ===== State ===== */
+state.userNick = state.userNick || '';
+state.adminLevels = state.adminLevels || {}; // {nick: level} 0=user,1,2,3
+state.registeredUsers = state.registeredUsers || []; // {name, role, registered}
+state.marketCredits = state.marketCredits || 0;
+state.marketOwned = state.marketOwned || {}; // {itemId:true}
+state.wallpapersOwned = state.wallpapersOwned || []; // ['wall_matrix', ...]
+state.clocksOwned = state.clocksOwned || []; // ['clock_neon', ...]
+state.activityLog = state.activityLog || [];
+const levelClasses = {1:'tag-l1', 2:'tag-l2', 3:'tag-l3'};
+
+/* ===== Enforce nickname: main screen banner ===== */
+(function enforceNickBanner(){
+  function ensureRegistered(nick){
+    if(!state.registeredUsers.find(u=>u.name===nick)){
+      state.registeredUsers.push({name:nick, role:'user', registered:new Date().toLocaleString()});
+      save?.();
+    }
+  }
+  function showBanner(){
+    if(document.getElementById('nickBanner')) return;
+    const b=document.createElement('div'); b.className='nick-banner'; b.id='nickBanner';
+    b.innerHTML = `<span>Установите ник:</span><input id="nickInput" placeholder="минимум 3 символа"/><button id="nickSet">Сохранить</button>`;
+    document.body.appendChild(b);
+    const inp=b.querySelector('#nickInput'), btn=b.querySelector('#nickSet');
+    btn.onclick=()=>{
+      const val = inp.value.trim();
+      if(!val || val.length<3){ showToast?.('Ник должен быть ≥ 3 символов'); return; }
+      state.userNick = val; ensureRegistered(val); save?.();
+      showToast?.('Ник установлен: '+val); b.remove();
+      renderUserBadge(); // бейдж уровня
+    };
+  }
+  if(!state.userNick || !state.userNick.trim()) showBanner();
+  if(typeof authSubmit === 'function'){
+    const _authSubmit = authSubmit;
+    authSubmit = function(){ _authSubmit(); if(!state.userNick || !state.userNick.trim()) showBanner(); };
+  }
+})();
+
+/* ===== User level badge (shows current user level) ===== */
+function renderUserBadge(){
+  const lvl = state.adminLevels[state.userNick||''] || 0;
+  const cls = levelClasses[lvl]; if(!cls) return;
+  const old=document.getElementById('userLvlBadge'); if(old) old.remove();
+  const tag=document.createElement('div'); tag.className=`tag ${cls}`; tag.id='userLvlBadge';
+  tag.textContent = `Lv${lvl} · ${state.userNick}`;
+  tag.style.position='fixed'; tag.style.right='12px'; tag.style.bottom='12px'; tag.style.zIndex='950';
+  document.body.appendChild(tag);
+}
+renderUserBadge();
+
+/* ===== Admin panel: search by nick, assign level, chat tags ===== */
+(function mountAdminPanel(){
+  const adminWin=document.getElementById('win-admin'); if(!adminWin) return;
+  const content=adminWin.querySelector('.content');
+
+  const assign=document.createElement('div'); assign.className='admin-block';
+  assign.innerHTML = `
+    <h3>Выдача админ‑уровня по нику</h3>
+    <div class="admin-inline">
+      <input id="admFindNick" class="admin-input" placeholder="Ник"/>
+      <button id="admSearch" class="admin-btn">🔍 Найти</button>
+      <select id="admLevelSel" class="admin-input">
+        <option value="0">User</option>
+        <option value="1">Admin Lv1 (зелёный)</option>
+        <option value="2">Admin Lv2 (фиолетовый)</option>
+        <option value="3">Admin Lv3 (золотой)</option>
+      </select>
+      <button id="admAssign" class="admin-btn">Назначить</button>
+      <span id="admStatus" class="mut"></span>
+    </div>
+    <div id="admUserInfo" style="margin-top:8px"></div>
+  `;
+  content.appendChild(assign);
+
+  assign.querySelector('#admSearch').onclick=()=>{
+    const nick=assign.querySelector('#admFindNick').value.trim();
+    const info=assign.querySelector('#admUserInfo'); info.innerHTML='';
+    if(!nick){ showToast?.('Введи ник'); return; }
+    const u = (state.registeredUsers||[]).find(x=>x.name===nick);
+    if(!u){ info.innerHTML='<div class="mut">Пользователь не найден</div>'; return; }
+    const lvl = state.adminLevels[nick]||0;
+    const cls = levelClasses[lvl]||'';
+    info.innerHTML = `👤 ${nick} ${lvl?`<span class="tag ${cls}">Lv${lvl}</span>`:''} · роль: ${u.role||'user'} · дата: ${u.registered||''}`;
+  };
+
+  assign.querySelector('#admAssign').onclick=()=>{
+    const nick=assign.querySelector('#admFindNick').value.trim();
+    const lvl=parseInt(assign.querySelector('#admLevelSel').value,10);
+    if(!nick){ showToast?.('Введи ник'); return; }
+    state.adminLevels[nick]=lvl; save?.();
+    assign.querySelector('#admStatus').textContent = `Назначено: ${nick} → Lv${lvl}`;
+    showToast?.(`Выдано: ${nick} → Lv${lvl}`);
+    if(nick===state.userNick) renderUserBadge();
+  };
+
+  // Chat tags injection (hook)
+  if(typeof renderChatMessage === 'function'){
+    const _r = renderChatMessage;
+    window.renderChatMessage = function(msg){
+      const lvl = state.adminLevels[msg.user||''] || 0;
+      msg._tagClass = levelClasses[lvl] || ''; // рендер использует msg._tagClass как CSS класс метки
+      _r(msg);
+    };
+  }
+})();
+
+/* ===== Marketplace: wallpapers and stylish clocks (purchase required) ===== */
+state.marketItems = state.marketItems || [
+  {id:'wall_matrix', name:'Живые обои "Matrix Rain"', cost:120, type:'wall',  rarity:'rare'},
+  {id:'wall_aurora', name:'Живые обои "Aurora Flux"', cost:150, type:'wall',  rarity:'legend'},
+  {id:'clock_neon',  name:'Стильные неон‑часы',       cost:100, type:'clock', rarity:'rare'}
+];
+(function mountMarketplace(){
+  if(document.getElementById('win-marketplace')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="win-marketplace" class="window market-deluxe">
+      <div class="winbar"><div class="win-title"><b>Marketplace</b></div>
+        <div class="win-actions"><div class="win-btn" onclick="closeWin('marketplace')">✕</div></div>
+      </div>
+      <div class="content">
+        <div class="mut">Баланс: <b id="marketCreditsView"></b> ⟡</div>
+        <div id="marketItemsList" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px"></div>
+      </div>
+    </div>
+  `);
+  if(!baseApps.find(a=>a.id==='marketplace')){
+    baseApps.push({id:'marketplace',label:'Marketplace',icon:'💎',open:()=>{openWin('marketplace'); renderMarketplace();}});
+    buildStartMenu?.();
+  }
+  if(!desktopIcons.find(i=>i.id==='marketplace')){
+    desktopIcons.push({id:'marketplace',name:'Marketplace',icon:'💎'}); renderDesktop?.();
+  }
+})();
+function renderMarketplace(){
+  const cv=document.getElementById('marketCreditsView'); if(cv) cv.textContent=state.marketCredits||0;
+  const root=document.getElementById('marketItemsList'); if(!root) return; root.innerHTML='';
+  (state.marketItems||[]).forEach(item=>{
+    const owned = !!state.marketOwned[item.id];
+    const tag = item.rarity==='legend' ? '<span class="market-legend">Legendary</span>' :
+               item.rarity==='rare'   ? '<span class="market-rare">Rare</span>' : '<span class="mut">Common</span>';
+    const card=document.createElement('div'); card.className='market-card';
+    card.innerHTML=`<b>${item.name}</b> · ${tag}
+      <div class="mut" style="margin:6px 0">Цена: ${item.cost} ⟡ ${owned?'<span class="mut">· Куплено</span>':''}</div>`;
+    const btn=document.createElement('button'); btn.className='market-btn'; btn.textContent=owned?'Применить':'Купить';
+    btn.onclick=()=>{
+      if(!owned){
+        if((state.marketCredits||0) < item.cost){ showToast?.('Недостаточно ⟡'); return; }
+        state.marketCredits -= item.cost; state.marketOwned[item.id]=true; save?.();
+        if(item.type==='wall' && !state.wallpapersOwned.includes(item.id)){ state.wallpapersOwned.push(item.id); }
+        if(item.type==='clock' && !state.clocksOwned.includes(item.id)){ state.clocksOwned.push(item.id); }
+        showToast?.('Куплено: '+item.name);
+        renderMarketplace(); renderWallpapers?.(); renderClocks?.();
+      } else {
+        if(item.type==='wall'){ applyLiveWallpaper(item.id); }
+        if(item.type==='clock'){ applyClock(item.id); }
+      }
+    };
+    card.appendChild(btn); root.appendChild(card);
+  });
+}
+
+/* ===== Owned Wallpapers window ===== */
+(function mountWallpapers(){
+  if(document.getElementById('win-wallpapers')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="win-wallpapers" class="window">
+      <div class="winbar"><div class="win-title"><b>Обои (купленные)</b></div>
+        <div class="win-actions"><div class="win-btn" onclick="closeWin('wallpapers')">✕</div></div>
+      </div>
+      <div class="content"><div id="wallList" style="display:grid;gap:8px"></div></div>
+    </div>
+  `);
+  if(!baseApps.find(a=>a.id==='wallpapers')){
+    baseApps.push({id:'wallpapers',label:'Обои',icon:'🖼️',open:()=>{openWin('wallpapers'); renderWallpapers();}}); buildStartMenu?.();
+  }
+  if(!desktopIcons.find(i=>i.id==='wallpapers')){
+    desktopIcons.push({id:'wallpapers',name:'Обои',icon:'🖼️'}); renderDesktop?.();
+  }
+})();
+function renderWallpapers(){
+  const root=document.getElementById('wallList'); if(!root) return; root.innerHTML='';
+  (state.wallpapersOwned||[]).forEach(id=>{
+    const name = id==='wall_matrix' ? 'Matrix Rain' : id==='wall_aurora' ? 'Aurora Flux' : id;
+    const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between';
+    row.innerHTML=`<div>🖼️ ${name}</div><div><button class="win-btn" data-id="${id}">Применить</button></div>`;
+    row.querySelector('button').onclick=()=>applyLiveWallpaper(id);
+    root.appendChild(row);
+  });
+}
+
+/* ===== Owned Clocks window ===== */
+(function mountClocks(){
+  if(document.getElementById('win-clocks')) return;
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="win-clocks" class="window">
+      <div class="winbar"><div class="win-title"><b>Часы (купленные)</b></div>
+        <div class="win-actions"><div class="win-btn" onclick="closeWin('clocks')">✕</div></div>
+      </div>
+      <div class="content"><div id="clockList" style="display:grid;gap:8px"></div></div>
+    </div>
+  `);
+  if(!baseApps.find(a=>a.id==='clocks')){
+    baseApps.push({id:'clocks',label:'Часы',icon:'⏱️',open:()=>{openWin('clocks'); renderClocks();}}); buildStartMenu?.();
+  }
+  if(!desktopIcons.find(i=>i.id==='clocks')){
+    desktopIcons.push({id:'clocks',name:'Часы',icon:'⏱️'}); renderDesktop?.();
+  }
+})();
+function renderClocks(){
+  const root=document.getElementById('clockList'); if(!root) return; root.innerHTML='';
+  (state.clocksOwned||[]).forEach(id=>{
+    const name = id==='clock_neon' ? 'Неон‑кольцо' : id;
+    const row=document.createElement('div'); row.style.display='flex'; row.style.justifyContent='space-between';
+    row.innerHTML=`<div>⏱️ ${name}</div><div><button class="win-btn" data-id="${id}">Применить</button></div>`;
+    row.querySelector('button').onclick=()=>applyClock(id);
+    root.appendChild(row);
+  });
+}
+
+/* ===== Apply live wallpaper (requires ownership) ===== */
+function applyLiveWallpaper(id){
+  if(!state.marketOwned[id]){ showToast?.('Обои доступны только после покупки'); return; }
+  let c=document.getElementById('liveWall'); if(!c){ c=document.createElement('canvas'); c.id='liveWall'; document.body.appendChild(c); }
+  const ctx=c.getContext('2d'); let W,H; function resize(){ W=c.width=window.innerWidth; H=c.height=window.innerHeight; } resize(); window.addEventListener('resize',resize);
+  const profile = id==='wall_matrix' ? {count:160, linkDist:80, hueBase:120} : {count:140, linkDist:90, hueBase:200};
+  const P=profile.count;
+  const parts=new Array(P).fill(0).map(()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*2.2+0.8,vx:(Math.random()-0.5)*0.9,vy:(Math.random()-0.5)*0.9,h:profile.hueBase + Math.floor(Math.random()*40)-20}));
+  function step(){
+    ctx.clearRect(0,0,W,H);
+    for(const p of parts){
+      p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>W) p.vx*=-1; if(p.y<0||p.y>H) p.vy*=-1;
+      ctx.beginPath(); ctx.fillStyle=`hsla(${p.h},70%,60%,.7)`; ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    }
+    for(let i=0;i<P;i++){ for(let j=i+1;j<P;j++){ const a=parts[i], b=parts[j]; const d=Math.hypot(a.x-b.x,a.y-b.y); if(d<profile.linkDist){ ctx.strokeStyle='rgba(255,255,255,.08)'; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); } } }
+    requestAnimationFrame(step);
+  }
+  step(); showToast?.('Живые обои применены');
+}
+
+/* ===== Apply stylish clock (requires ownership) ===== */
+function applyClock(id){
+  if(!state.marketOwned[id]){ showToast?.('Часы доступны только после покупки'); return; }
+  if(id==='clock_neon'){
+    let clock=document.getElementById('neonClock');
+    if(!clock){
+      clock=document.createElement('div'); clock.className='neon-clock'; clock.id='neonClock';
+      clock.innerHTML = `<div class="face" id="neonFace">--:--</div>`;
+      document.body.appendChild(clock);
+    }
+    function tick(){
+      const d=new Date(); const h=String(d.getHours()).padStart(2,'0'); const m=String(d.getMinutes()).padStart(2,'0');
+      document.getElementById('neonFace').textContent=`${h}:${m}`;
+      const angle = (d.getSeconds()/60)*360;
+      document.getElementById('neonClock').style.setProperty('--angle', `${angle}deg`);
+    }
+    clearInterval(window.__clockTimer); window.__clockTimer = setInterval(tick, 1000); tick();
+    showToast?.('Стильные часы применены');
+  }
+}
+
+/* ===== Terminal helpers (optional) ===== */
+const prevTermRun = typeof termRun==='function' ? termRun : null;
+function termRun(){
+  const v=document.getElementById('termIn')?.value.trim(); if(!v){ prevTermRun?.(); return; }
+  const [cmd,...rest]=v.split(' ');
+  if(cmd==='market'){ openWin('marketplace'); renderMarketplace?.(); termPrint?.('Открыт Marketplace'); }
+  else if(cmd==='wallpapers'){ openWin('wallpapers'); renderWallpapers?.(); termPrint?.('Открыт раздел Обои'); }
+  else if(cmd==='clocks'){ openWin('clocks'); renderClocks?.(); termPrint?.('Открыт раздел Часы'); }
+  else if(cmd==='wall'){ const id=rest[0]; applyLiveWallpaper(id); }
+  else if(cmd==='clock'){ const id=rest[0]; applyClock(id); }
+  else { prevTermRun?.(); }
+  document.getElementById('termIn').value='';
+}
+
+/* ===== Initial renders ===== */
+setTimeout(()=>{ renderMarketplace?.(); renderWallpapers?.(); renderClocks?.(); }, 200);
+</script>
+<script>
+// Добавь товар доступа
+state.marketItems = state.marketItems || [];
+if(!state.marketItems.find(i=>i.id==='market_access')){
+  state.marketItems.unshift({id:'market_access', name:'Доступ к Marketplace (ключ)', cost:50, type:'access', rarity:'common'});
+}
+state.marketAccess = !!state.marketOwned?.market_access;
+
+// Перехват открытия Marketplace — только при наличии ключа
+(function gateMarketplaceAccess(){
+  const app = (baseApps||[]).find(a=>a.id==='marketplace');
+  if(!app) return;
+  const orig = app.open;
+  app.open = function(){
+    const has = !!state.marketOwned['market_access'];
+    if(!has){ showToast?.('Купи ключ доступа в Marketplace'); openWin('marketplace'); renderMarketplace?.(); return; }
+    orig();
+  };
+})();
+
+// Применение покупки ключа
+function renderMarketplace(){
+  // ... твой существующий рендер ...
+  // В обработчике покупки:
+  // if(item.type==='access'){ state.marketOwned[item.id]=true; showToast?.('Доступ к Marketplace открыт'); }
+}
+</script><script>
+// Добавь товар доступа
+state.marketItems = state.marketItems || [];
+if(!state.marketItems.find(i=>i.id==='market_access')){
+  state.marketItems.unshift({id:'market_access', name:'Доступ к Marketplace (ключ)', cost:50, type:'access', rarity:'common'});
+}
+state.marketAccess = !!state.marketOwned?.market_access;
+
+// Перехват открытия Marketplace — только при наличии ключа
+(function gateMarketplaceAccess(){
+  const app = (baseApps||[]).find(a=>a.id==='marketplace');
+  if(!app) return;
+  const orig = app.open;
+  app.open = function(){
+    const has = !!state.marketOwned['market_access'];
+    if(!has){ showToast?.('Купи ключ доступа в Marketplace'); openWin('marketplace'); renderMarketplace?.(); return; }
+    orig();
+  };
+})();
+
+// Применение покупки ключа
+function renderMarketplace(){
+  // ... твой существующий рендер ...
+  // В обработчике покупки:
+  // if(item.type==='access'){ state.marketOwned[item.id]=true; showToast?.('Доступ к Marketplace открыт'); }
+}
+</script><script>
+// Минимальные уровни доступа к приложениям
+state.appMinLevel = state.appMinLevel || {
+  marketplace: 0, wallpapers: 0, clocks: 0,
+  journal: 0, explorer2: 0, tasks: 0,
+  net: 1,             // откроется с Lv1
+  admincoins: 1,      // Lv1
+  admin: 2            // панель админа с Lv2 (настрой)
+};
+
+// Применяем гейтинг (иконки тускнеют, запуск блокируется)
+(function applyAppGating(){
+  function lvl(){ return state.adminLevels[state.userNick||''] || 0; }
+  (baseApps||[]).forEach(app=>{
+    const min = state.appMinLevel[app.id] ?? 0;
+    const orig = app.open;
+    app.open = function(){
+      if(lvl() < min){ showToast?.(`Недоступно: требуется уровень ${min}`); return; }
+      orig();
+    };
+  });
+  (desktopIcons||[]).forEach(icon=>{
+    const min = state.appMinLevel[icon.id] ?? 0;
+    const el = document.querySelector(`[data-app="${icon.id}"]`);
+    if(el){
+      const blocked = (lvl() < min);
+      el.style.filter = blocked ? 'grayscale(1) opacity(.45)' : 'none';
+      el.style.pointerEvents = blocked ? 'none' : 'auto';
+      el.title = blocked ? `Требуется уровень ${min}` : '';
+    }
+  });
+})();
+</script><script>
+// Если нет хука, вставь метку рядом с ником при рендере сообщений
+function chatTagFor(nick){
+  const lvl = state.adminLevels[nick||''] || 0;
+  const cls = {1:'tag-l1',2:'tag-l2',3:'tag-l3'}[lvl] || '';
+  if(!cls) return null;
+  const span = document.createElement('span');
+  span.className = 'tag '+cls;
+  span.textContent = 'Lv'+lvl;
+  return span;
+}
+
+// Пример использования: в месте, где ты создаёшь сообщение:
+// const line = document.createElement('div');
+// const nameEl = document.createElement('b'); nameEl.textContent = msg.user;
+// const tagEl = chatTagFor(msg.user); if(tagEl) nameEl.appendChild(document.createTextNode(' ')), nameEl.appendChild(tagEl);
+// line.appendChild(nameEl); line.appendChild(document.createTextNode(' '+msg.text));
+</script><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Адаптивная проверка</title>
+  <style>
+    :root { --gap: 20px; }
+    body { margin:0; font-family:system-ui, Arial, sans-serif; }
+    header { background:#0ef; padding:16px; text-align:center; }
+    nav { display:flex; flex-wrap:wrap; justify-content:center; gap:12px; padding:12px; }
+    nav a { text-decoration:none; color:#000; padding:.6rem 1rem; background:#eee; border-radius:8px; }
+
+    .container {
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--gap);
+      padding: var(--gap);
+    }
+    .card {
+      background:#f7f7f9;
+      border:1px solid #e7e7ee;
+      border-radius:12px;
+      padding:16px;
+      min-height:80px;
+    }
+
+    /* 📱 Мобильная адаптация */
+    @media (max-width: 768px) {
+      .container { grid-template-columns: 1fr; --gap: 12px; }
+      nav { flex-direction:column; }
+      nav a { display:block; text-align:center; font-size:18px; padding:12px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Адаптив работает</h1>
+    <nav>
+      <a href="#">Главная</a>
+      <a href="#">Раздел</a>
+      <a href="#">Контакты</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="card">Блок 1</div>
+    <div class="card">Блок 2</div>
+  </main>
+</body>
+</html><form id="registerForm">
+  <input type="text" id="username" placeholder="Ваш ник" required>
+  <input type="password" id="password" placeholder="Пароль" required>
+  
+  <!-- Секретное поле -->
+  <input type="text" id="secretCode" placeholder="Секретный код">
+  
+  <button type="submit">Зарегистрироваться</button>
+</form>
+<div id="registerOutput"></div><script src="script.js"></script>
+</body>
+</html>
