@@ -2293,20 +2293,21 @@ function chatTagFor(nick){
     </nav>
   </header>
 
-  <main class="container">
-    <div class="card">Блок 1</div>
-    <div class="card">Блок 2</div>
-  </main>
-</body>
-</html><form id="registerForm">
-  <input type="text" id="username" placeholder="Ваш ник" required>
-  <input type="password" id="password" placeholder="Пароль" required>
-  
-  <!-- Секретное поле -->
-  <input type="text" id="secretCode" placeholder="Секретный код">
-  
-  <button type="submit">Зарегистрироваться</button>
-</form>
-<div id="registerOutput"></div><script src="script.js"></script>
+ <main class="container">
+  <div class="card">Блок 1</div>
+  <div class="card">Блок 2</div>
+
+  <!-- форма регистрации внутри body -->
+  <form id="registerForm">
+    <input type="text" id="username" placeholder="Ваш ник" required>
+    <input type="password" id="password" placeholder="Пароль" required>
+    <input type="text" id="secretCode" placeholder="Секретный код">
+    <button type="submit">Зарегистрироваться</button>
+  </form>
+
+  <div id="registerOutput"></div>
+</main>
+
+<script src="script.js"></script>
 </body>
 </html>
